@@ -33,8 +33,7 @@ then
 
     module purge
     module load bluebear
-    module load bear-apps/2020a
-    module load Python/3.8.2-GCCcore-9.3.0
+    module load Anaconda3/2018.12
 
     pip install -r requirements.txt
 
