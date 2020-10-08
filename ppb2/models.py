@@ -100,7 +100,9 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             "using the following models:", classifiers)
 
         self.model = StackingClassifier(classifiers,
-            # final_estimator=LogisticRegression()
+            n_jobs=1,
+            passthrough=True,
+            verbose=True,
         )
 
     def fit(self, X, y):
@@ -147,7 +149,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model = KNeighborsClassifier(
                 n_neighbors=k,
                 metric="jaccard", 
-                # algorithm="brute", 
+                algorithm="brute", 
                 n_jobs=-1)
         elif model_name == "nb":
             self.model = BernoulliNB(alpha=1.)
@@ -170,7 +172,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         assert X.shape[0] == y.shape[0]
 
-        if  self.model_name == "nn+nb":
+        if self.model_name == "nn+nb":
             self.X = X 
             self.y = y
 

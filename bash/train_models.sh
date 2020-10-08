@@ -3,13 +3,13 @@
 #SBATCH --job-name=TRAINMODELS
 #SBATCH --output=TRAINMODELS_%A_%a.out
 #SBATCH --error=TRAINMODELS_%A_%a.err
-#SBATCH --array=0-1682
+#SBATCH --array=0-3365
 #SBATCH --time=10-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 
 # models=(nn nb nb+nn)
-models=(nb+nn)
+models=(nb+nn stack)
 # fps=(morg2 morg3 maccs circular rdk)
 fps=(morg2)
 target_ids=({0..1682})
@@ -39,12 +39,12 @@ then
     # conda install --file spec-file.txt
     # conda env update -f env.yml
 
-    conda create -n ppb2_env 
+    conda env create -f env.yml
     conda activate pp2_env
     # conda install -c rdkit rdkit libboost=1.65.1 -y
     # conda install -c openeye openeye-toolkits -y
     # conda install -c conda-forge swifter -y
-    conda env update --file env.yml 
+    # conda env update --file env.yml 
 
     args=$(echo --model ${model}\
         --fp ${fp}\
