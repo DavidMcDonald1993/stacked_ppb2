@@ -168,7 +168,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         assert X.shape[0] == y.shape[0]
 
-        if  self.model == "nn+nb":
+        if  self.model_name == "nn+nb":
             self.X = X 
             self.y = y
 

@@ -36,7 +36,9 @@ then
     module load Anaconda3/2018.12
 
     # pip install -r requirements.txt
-    conda install --file spec-file.txt
+    # conda install --file spec-file.txt
+    conda create env -n ppb2_env -f env.yml
+    conda activate ppb2_env
 
     args=$(echo --model ${model}\
         --fp ${fp}\
