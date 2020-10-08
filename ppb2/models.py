@@ -54,8 +54,8 @@ def fit_nb(nb, query, X, y,
             else -np.inf)
     nb.fit(X, y)
     return (nb.predict(query)[0] if mode=="predict"
-        else np.predict_proba(query)[0,1] if mode=="prob"
-        else np.predict_log_proba(query)[0,1])
+        else nb.predict_proba(query)[0,1] if mode=="prob"
+        else nb.predict_log_proba(query)[0,1])
 
 def local_nb_prediction(nb, queries, X, y,
     mode="predict"):
@@ -153,10 +153,12 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model = BernoulliNB(alpha=1.)
         elif model_name == "svc":
             self.model = SVC(probability=True)
-        elif _name == "bag":
+        elif model_name == "bag":
             self.model = BaggingClassifier(n_jobs=-1)
-        elif mode_name == "lr":
-            self.model = LogisticRegressionCV(n_jobs=-1)
+        elif model_name == "lr":
+            self.model = LogisticRegressionCV(
+                max_iter=1000,
+                n_jobs=1)
         
     def fit(self, X, y):
         """

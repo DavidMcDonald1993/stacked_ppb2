@@ -53,8 +53,10 @@ def main():
 
     # n_targets = Y.shape[1]
 
+    target_id = args.target_id
+
     model_filename = os.path.join("models", 
-        "target-{}-{}-{}.pkl".format(args.target_id, 
+        "target-{}-{}-{}.pkl".format(target_id, 
                 args.fp, args.model))
     assert os.path.exists(model_filename)
     print ("reading model from", model_filename)
@@ -75,7 +77,7 @@ def main():
     prediction_probs = model.predict_proba(queries)
     prediction_log_probs = model.predict_log_proba(queries)
 
-    hits = query_index[prediction]
+    hits = query_index[prediction.astype(bool)]
 
     id_to_target_filename = os.path.join("data", 
         "id_to_gene_symbol.pkl")
@@ -85,7 +87,6 @@ def main():
     print ("hits for", id_to_target[target_id], ":")
     print (hits)
 
-    
     # columns = [id_to_target[i] for i in range(n_targets)]
 
     # id_to_compound_filename = os.path.join("data", 

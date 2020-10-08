@@ -9,11 +9,11 @@ import swifter
 
 import pickle as pkl
 
-from rdkit import Chem
-from rdkit.Chem import AllChem
+# from rdkit import Chem
+# from rdkit.Chem import AllChem
 
-from openeye import oechem
-from openeye import oegraphsim
+# from openeye import oechem
+# from openeye import oegraphsim
 
 import multiprocessing as mp
 
@@ -22,11 +22,14 @@ import functools
 # RDK
 
 def get_chems(smiles):
+    from rdkit import Chem
+
     print ("building RDK chems from SMILES")
     return smiles.swifter.apply(
         lambda smi: Chem.MolFromSmiles(smi))
 
 def rdk_wrapper(x, n_bits):
+    from rdkit import Chem
     return [bool(y) 
             for y in Chem.RDKFingerprint( x , fpSize=n_bits )]
 
@@ -55,6 +58,7 @@ def get_rdk(X, n_bits=1024, parallel=True):
 def morg_wrapper(chem, 
         radius, 
         n_bits):
+    from rdkit.Chem import AllChem
     return [bool(bit) 
         for bit in AllChem.GetMorganFingerprintAsBitVect(chem, 
             radius=radius, 
@@ -101,6 +105,7 @@ def get_bit_string(fp):
     return s
 
 def mol_wrapper(smi):
+    from openeye import oechem
     mol = oechem.OEGraphMol()
     oechem.OESmilesToMol(mol, smi)
     return mol
@@ -125,6 +130,7 @@ def circular_wrapper(mol,
     num_bits = 1024,
     min_radius = 2,
     max_radius = 2):
+    from openeye import oegraphsim
     fp = oegraphsim.OEFingerPrint()
     oegraphsim.OEMakeCircularFP(fp, mol, 
             num_bits, 
@@ -162,6 +168,7 @@ def get_circular(X,
     return np.array(fps)
 
 def maccs_wrapper(mol, ):
+    from openeye import oegraphsim
     fp = oegraphsim.OEFingerPrint()
     oegraphsim.OEMakeMACCS166FP(fp, mol,)
     return get_bit_string(fp)

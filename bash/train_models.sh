@@ -37,8 +37,14 @@ then
 
     # pip install -r requirements.txt
     # conda install --file spec-file.txt
-    conda create env -n ppb2_env -f env.yml
-    conda activate ppb2_env
+    # conda env update -f env.yml
+
+    conda create -n ppb2_env 
+    conda activate pp2_env
+    # conda install -c rdkit rdkit libboost=1.65.1 -y
+    # conda install -c openeye openeye-toolkits -y
+    # conda install -c conda-forge swifter -y
+    conda env update --file env.yml 
 
     args=$(echo --model ${model}\
         --fp ${fp}\
