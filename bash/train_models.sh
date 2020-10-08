@@ -35,7 +35,8 @@ then
     module load bluebear
     module load Anaconda3/2018.12
 
-    pip install -r requirements.txt
+    # pip install -r requirements.txt
+    conda install --file spec-file.txt
 
     args=$(echo --model ${model}\
         --fp ${fp}\
