@@ -34,7 +34,8 @@ def main():
 
     data_dir = os.path.join("data", )
     
-    training_data_filename = os.path.join(data_dir, "compounds.smi") # chembl 22
+    training_data_filename = os.path.join(data_dir,
+        "compounds.smi") # chembl 22
     print ("reading training compounds from", 
         training_data_filename)
 
