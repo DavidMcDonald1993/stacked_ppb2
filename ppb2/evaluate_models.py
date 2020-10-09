@@ -128,13 +128,13 @@ def main():
     X = read_smiles(smiles_filename)
     y = load_labels().A
 
-    idx = range(1000)
+    # idx = range(1000)
 
-    X = X[idx]
-    y = y[idx, ]
+    # X = X[idx]
+    # y = y[idx, ]
 
-    idx = np.logical_and(y.sum(0) >= 10, (1-y).sum(0) >=10)
-    y = y[:,idx]
+    # idx = np.logical_and(y.sum(0) >= 10, (1-y).sum(0) >=10)
+    # y = y[:,idx]
 
     assert X.shape[0] == y.shape[0]
     
