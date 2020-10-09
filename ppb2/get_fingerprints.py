@@ -133,10 +133,10 @@ def circular_wrapper(mol,
     from openeye import oegraphsim
     fp = oegraphsim.OEFingerPrint()
     oegraphsim.OEMakeCircularFP(fp, mol, 
-            num_bits, 
-            min_radius, max_radius, 
-            oegraphsim.OEFPAtomType_DefaultPathAtom, 
-            oegraphsim.OEFPBondType_DefaultPathBond)
+        num_bits, 
+        min_radius, max_radius, 
+        oegraphsim.OEFPAtomType_DefaultPathAtom, 
+        oegraphsim.OEFPBondType_DefaultPathBond)
     return get_bit_string(fp)
 
 def get_circular(X, 
@@ -207,9 +207,18 @@ def compute_fp(X, fp, n_bits=1024):
     else:
         raise NotImplementedError
 
-    print ("Computed fingerprint")
-    print ("Shape is", X.shape)
+    print ("Computed", fp, "fingerprint")
     
+    return X
+
+def read_smiles(smiles_filename):
+    print ("reading training compounds from", 
+        smiles_filename)
+
+    X = pd.read_csv(smiles_filename, header=None, 
+        sep="\t", index_col=1)[0].astype("string")
+    print ("number of training SMILES:", 
+        X.shape[0])
     return X
 
 def load_training_fingerprints(X, fp):

@@ -6,13 +6,13 @@ import pandas as pd
 
 import pickle as pkl 
 
-from get_fingerprints import load_labels
+from get_fingerprints import read_smiles, load_labels
 from models import PPB2, StackedPPB2
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--target_id", type=int)
+    # parser.add_argument("--target_id", type=int)
 
     parser.add_argument("--fp", default="morg2",
         choices=["mqn", "xfp", "ecfp4", 
@@ -36,35 +36,17 @@ def main():
     
     training_data_filename = os.path.join(data_dir,
         "compounds.smi") # chembl 22
-    print ("reading training compounds from", 
-        training_data_filename)
+    X = reas_smiles(training_data_filename)
+   
+    Y = load_labels().A
 
-    X = pd.read_csv(training_data_filename, header=None, 
-        sep="\t", index_col=1)[0].astype("string")
-    print ("number of training SMILES:", 
-        X.shape[0])
-    Y = load_labels()
+    # idx = range(1000)
 
-    # from sklearn.model_selection import train_test_split
+    # X = X[idx]
+    # Y = Y[idx, ]
 
-    # X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=100)
-
-    n_targets = Y.shape[1]
-
-    target_id = args.target_id
-    assert target_id < n_targets
-
-    # map id to target name
-    # with open("data/id_to_gene_symbol.pkl", "rb") as f:
-        # id_to_targets = pkl.load(f)
-
-    # for target_id in range(n_targets):
-
-    # target_name = id_to_targets[target_id]
-
-    print ("training model for target_id", 
-        target_id,  )
-    labels = Y[:, target_id].A.flatten()
+    # idx = np.logical_and(Y.any(0), (1-Y).any())
+    # Y = Y[:,idx]
 
     if args.model == "stack":
         model = StackedPPB2()
@@ -76,13 +58,12 @@ def main():
     os.makedirs(model_dir, exist_ok=True)
 
     model_filename = os.path.join(model_dir, 
-        "target-{}-{}-{}.pkl".format(target_id, 
-                args.fp, args.model))
+        "{}-{}.pkl".format(args.fp, args.model))
 
     if not os.path.exists(model_filename):
 
         print ("fitting PPB2 model")
-        model.fit(X, labels)
+        model.fit(X, Y)
 
         print ("pickling trained model to", 
             model_filename)

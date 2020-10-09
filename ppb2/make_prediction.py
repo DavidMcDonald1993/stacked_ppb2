@@ -13,6 +13,8 @@ import pandas as pd
 
 import pickle as pkl 
 
+from get_fingerprints import read_smiles
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -25,9 +27,10 @@ def parse_args():
         choices=["nn", "nb", "nn+nb", 
             "lr", "svc", "bag", "stack"])
 
-    parser.add_argument("--target_id", type=int)
+    # parser.add_argument("--target_id", type=int)
 
     parser.add_argument("--query",)
+    parser.add_argument("--output")
 
     parser.add_argument("-k", default=200, 
         type=int)
@@ -37,27 +40,23 @@ def parse_args():
 def main():
 
     args = parse_args()
+    assert args.query is not None
+    assert args.output is not None
 
-    # data_dir = os.path.join("data", )
-    
-    # X = load_fingerprints(args.fp,
-    #     fingerprint_dir=data_dir)
-    # print ("training fingerprints shape is", 
-    #     X.shape)
 
-    # labels_filename = os.path.join(data_dir,
-    #     "targets.npz")
-    # print ("loading labels from", labels_filename)
-    # Y = sp.load_npz(labels_filename).A
-    # print ("labels shape is", Y.shape)
+    # load target name mappings
+    target_mapping_filename = os.path.join("data",
+        "id_to_gene_symbol.pkl")
+    print ("reading target mapping from",
+        target_mapping_filename)
+    with open(target_mapping_filename, "rb") as f:
+        target_mapping = pkl.load(f)
 
-    # n_targets = Y.shape[1]
 
-    target_id = args.target_id
+    # target_id = args.target_id
 
     model_filename = os.path.join("models", 
-        "target-{}-{}-{}.pkl".format(target_id, 
-                args.fp, args.model))
+        "{}-{}.pkl".format(args.fp, args.model))
     assert os.path.exists(model_filename)
     print ("reading model from", model_filename)
     with open(model_filename, "rb") as f:
@@ -66,8 +65,7 @@ def main():
     # load queries (SMILES format)
     query_filename = args.query 
     print ("reading_queries from", query_filename)
-    queries = pd.read_csv(query_filename, header=None, 
-        sep="\t", index_col=1)[0].astype("string")
+    queries = read_smiles(query_filename)
 
     query_index = queries.index 
     n_queries = queries.shape[0]
@@ -75,58 +73,65 @@ def main():
 
     prediction = model.predict(queries)
     prediction_probs = model.predict_proba(queries)
-    prediction_log_probs = model.predict_log_proba(queries)
+    n_targets = prediction.shape[1]
+    targets = [target_mapping[t] 
+            for t in range(n_targets)]
 
-    hits = query_index[prediction.astype(bool)]
+    if not isinstance(prediction, np.ndarray):
+        prediction = prediction.A
 
-    id_to_target_filename = os.path.join("data", 
-        "id_to_gene_symbol.pkl")
-    with open(id_to_target_filename, "rb") as f:
-        id_to_target = pkl.load(f)
+    prediction = pd.DataFrame(prediction, 
+        index=query_index,
+        columns=targets)
+    prediction_probs = pd.DataFrame(prediction_probs,
+        index=query_index,
+        columns=targets)
 
-    print ("hits for", id_to_target[target_id], ":")
-    print (hits)
+    output_dir = os.path.join(
+        args.output, "{}-{}".format(args.fp, args.model, ))
+    os.makedirs(output_dir, exist_ok=True)
 
-    # columns = [id_to_target[i] for i in range(n_targets)]
+    prediction_filename = os.path.join(output_dir,
+        "predictions.csv")
+    print ("writing predictions to", prediction_filename)
+    prediction.to_csv(prediction_filename)
+    
+    probs_filename = os.path.join(output_dir,
+        "probs.csv")
+    print ("writing probs to", probs_filename)
+    prediction_probs.to_csv(probs_filename)
 
-    # id_to_compound_filename = os.path.join("data", 
-    #     "id_to_compound.pkl")
-    # with open(id_to_compound_filename, "rb") as f:
-    #     id_to_compound = pkl.load(f)
-    # # index = [id_to_compound[i] for i in range(n_queries)]
+    
 
-    # filename = os.path.join(".", 
-    #      "{}-{}".format(args.fp, args.model, args.k))
-    # if "nn" in args.model:
-    #     filename += "-k={}".format(args.k)
-    # predictions_filename = filename + "_predictions.csv"
-    # print ("writing predictions to", predictions_filename)
-    # predictions = pd.DataFrame(predictions,
-    #     index=query_index
-    #     )
-    # predictions.columns = [id_to_target[i] 
-    #     for i in predictions.columns]
-    # predictions.to_csv(predictions_filename)
+    # print ("pickling predictions to",
+    #     prediction_filename)
+    # with open(prediction_filename, "wb") as f:
+    #     pkl.dump(prediction, f, pkl.HIGHEST_PROTOCOL)
 
-    # n = 100
-    # # rank top n targets for each query
-    # predictions = predictions.values
-    # idx = predictions.argsort(axis=-1,)[:, ::-1][:,:n]
-    # predictions_ranked_filename = filename + \
-    #     "_top_{}_targets.tsv".format(n)
-    # print ("writing top", n, "targets for each query to",
-    #     predictions_ranked_filename)
-    # with open(predictions_ranked_filename, "w") as f:
-    #     f.write("Query Compound\t{}\n".format(
-    #         "\t".join(("Target {}".format(i+1) 
-    #             for i in range(n)))))
-    #     for i, row in enumerate(idx):
-    #         f.write("{}".format(query_index[i]))
-    #         for target_id in row:
-    #             prob = predictions[i, target_id]
-    #             if prob > 0:
-    #                 f.write("\t{}".format(id_to_target[target_id], ))
-    #         f.write("\n")
+    # print ("pickling probs to",
+    #     probs_filename)
+    # with open(probs_filename, "wb") as f:
+    #     pkl.dump(prediction_probs, f, pkl.HIGHEST_PROTOCOL)
+
+    n = 100
+    # rank top n targets for each query
+    prediction_probs = prediction_probs.values
+    idx = prediction_probs.argsort(axis=-1,)[:, ::-1][:,:n]
+    predictions_ranked_filename = os.path.join(output_dir,
+        "top_{}_targets.tsv".format(n))
+    print ("writing top", n, "targets for each query to",
+        predictions_ranked_filename)
+    with open(predictions_ranked_filename, "w") as f:
+        f.write("Query Compound\t{}\n".format(
+            "\t".join(("Target {}".format(i+1) 
+                for i in range(n)))))
+        for i, row in enumerate(idx):
+            f.write("{}".format(query_index[i]))
+            for target_id in row:
+                prob = prediction_probs[i, target_id]
+                if prob > 0:
+                    f.write("\t{}".format(target_mapping[target_id], ))
+            f.write("\n")
 
 
 if __name__ == "__main__":
