@@ -6,7 +6,7 @@
 #SBATCH --array=0-29
 #SBATCH --time=10-00:00:00
 #SBATCH --ntasks=4
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 
 models=(nb nn nn+nb svc bag lr)
 fps=(morg2 morg3 maccs circular rdk)
