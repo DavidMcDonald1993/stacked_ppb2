@@ -5,7 +5,7 @@
 #SBATCH --error=EVALMODELS_%A_%a.err
 #SBATCH --array=0-29
 #SBATCH --time=10-00:00:00
-#SBATCH --ntasks=10
+#SBATCH --ntasks=4
 #SBATCH --mem=10G
 
 models=(nb nn nn+nb svc bag lr)
@@ -35,7 +35,7 @@ then
     # conda env update -f env.yml
 
     # conda env create -f env.yml
-    source activate pp2_env
+    source activate ppb2_env
     # conda install -c rdkit rdkit libboost=1.65.1 -y
     # conda install -c openeye openeye-toolkits -y
     # conda install -c conda-forge swifter -y

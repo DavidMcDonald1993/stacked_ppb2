@@ -35,7 +35,7 @@ then
     # conda env update -f env.yml
 
     # conda env create -f env.yml
-    source activate pp2_env
+    source activate ppb2_env
     # conda install -c rdkit rdkit libboost=1.65.1 -y
     # conda install -c openeye openeye-toolkits -y
     # conda install -c conda-forge swifter -y
