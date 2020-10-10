@@ -8,7 +8,7 @@
 #SBATCH --ntasks=10
 #SBATCH --mem=10G
 
-models=(nb nn n+nb svc bag lr)
+models=(nb nn nn+nb svc bag lr)
 fps=(morg2 morg3 maccs circular rdk)
 
 num_models=${#models[@]}
