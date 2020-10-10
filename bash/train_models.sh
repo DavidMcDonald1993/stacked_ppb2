@@ -8,13 +8,11 @@
 #SBATCH --ntasks=1
 #SBATCH --mem=20G
 
-# models=(nn nb nb+nn)
-models=(nb+nn stack)
+models=(nn+nb stack)
 fps=(morg2 morg3 maccs circular rdk)
 
 num_models=${#models[@]}
 num_fps=${#fps[@]}
-num_targets=${#target_ids[@]}
 
 model_id=$((SLURM_ARRAY_TASK_ID / num_fps % num_models))
 fps_id=$((SLURM_ARRAY_TASK_ID % num_fps))
@@ -36,15 +34,16 @@ then
     # conda install --file spec-file.txt
     # conda env update -f env.yml
 
-    conda env create -f env.yml
-    conda activate pp2_env
+    # conda env create -f env.yml
+    source activate pp2_env
     # conda install -c rdkit rdkit libboost=1.65.1 -y
     # conda install -c openeye openeye-toolkits -y
     # conda install -c conda-forge swifter -y
+    # pip install --user scikit-multilearn
     # conda env update --file env.yml 
 
     args=$(echo --model ${model}\
         --fp ${fp}\
-        --target_id ${target_id})
+        )
     python ppb2/train_models.py ${args}
 fi

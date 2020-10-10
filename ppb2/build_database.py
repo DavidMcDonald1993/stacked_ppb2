@@ -95,11 +95,9 @@ def main():
     # build mapping from compound to target list
     compounds_to_targets = construct_compound_to_targets(df)
 
-    output_dir = os.path.join("data", 
-        "min_actives={}".format(min_actives))
-    if not os.path.exists(output_dir):
-        print ("making directory", output_dir)
-        os.makedirs(output_dir, exist_ok=True)
+    output_dir = os.path.join("data", )
+    print ("making directory", output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     # output mapping to file
     compounds_to_targets_filename = os.path.join(output_dir,

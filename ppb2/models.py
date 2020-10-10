@@ -96,9 +96,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
 
         if self.multi_label:
             print ("fitting final estimators")
-            self.final_estimator = [
-                clone(self.final_estimator) 
-                    for _ in range(self.n_targets)]
+            if not isinstance(self.final_estimator, list):
+                self.final_estimator = [
+                    clone(self.final_estimator) 
+                        for _ in range(self.n_targets)]
 
             for target_id in range(self.n_targets):
                 self.final_estimator[target_id].fit(meta_preds[...,target_id], y[:,target_id])

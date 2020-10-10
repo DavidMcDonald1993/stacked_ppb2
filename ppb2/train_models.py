@@ -36,7 +36,7 @@ def main():
     
     training_data_filename = os.path.join(data_dir,
         "compounds.smi") # chembl 22
-    X = reas_smiles(training_data_filename)
+    X = read_smiles(training_data_filename)
    
     Y = load_labels().A
 
