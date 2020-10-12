@@ -20,16 +20,25 @@ from models import StackedPPB2, PPB2
 
 import pickle as pkl
 
-
-
 def compute_measures(
     labels,
     pred, 
     probs, 
-    ):  
+    k=5):  
 
     assert len(labels.shape) == len(pred.shape) == len(probs.shape) == 2
+    assert (labels.sum(axis=1) >= k).all(), "must have at least k positive examples"
     n_queries = labels.shape[0]
+
+    # precision at k
+    idx = probs.argsort(axis=1)[:, -k:]
+    assert idx.shape[0] == n_queries
+    assert idx.shape[1] == k
+    p_at_k = np.array([
+        precision_score(labels_[idx_], pred_[idx_])
+        for labels_, pred_, idx_ in 
+            zip(labels, pred, idx)
+    ])
 
     labels = labels.T
     pred = pred.T
@@ -42,21 +51,22 @@ def compute_measures(
     precision = precision_score(labels, pred, average=None )
     recall = recall_score(labels, pred, average=None )
 
-    assert len(roc) == len(ap) == len(f1) == len(precision) == len(recall) == n_queries
+    assert len(p_at_k) == len(roc) == len(ap) == len(f1) == len(precision) == len(recall) == n_queries
 
-    return (roc.mean(), ap.mean(), f1.mean(), 
+    return (p_at_k.mean(), roc.mean(), ap.mean(), f1.mean(), 
         precision.mean(), recall.mean())
 
 def cross_validation(
     X, Y, 
     model,
     n_splits=5,
-    ):
+    k=5):
 
     n_compounds = X.shape[0]
     n_targets = Y.shape[1]
 
     metric_names = [
+        "p@{}".format(k),
         "ROC", "AP", 
         "f1", 
         "precision", "recall"
@@ -104,10 +114,42 @@ def cross_validation(
 
     return results.mean(0)
 
+def filter_training_data(X, y, 
+    min_compounds=10, 
+    min_target_hits=10):
+    print ("filtering training data to ensure",
+        "at least", min_compounds, "compounds hit each target and",
+        "each compound hits", min_target_hits, "targets")
+
+    while (y.sum(axis=0) < min_compounds).any() or\
+        (y.sum(axis=1) < min_target_hits).any():
+
+        # filter targets
+        idx = np.logical_and(
+            y.sum(axis=0) >= min_compounds, 
+            (1-y).sum(axis=0) >= min_compounds)
+        y = y[:,idx]
+
+        # filter compounds
+        idx = y.sum(axis=1) >= min_target_hits
+        X = X[idx]
+        y = y[idx, ]
+
+
+    assert (y.sum(axis=0) >= min_compounds).all()
+    assert ((1-y).sum(axis=0) >= min_compounds).all()
+    assert (y.sum(axis=1) >= min_target_hits).all()
+    assert ((1-y).sum(axis=1) >= min_target_hits).all()
+
+    print ("num compounds after filtering:", X.shape[0])
+    print ("num targets after filtering:", y.shape[1])
+
+    return X, y
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--fp", default="ecfp4",
+    parser.add_argument("--fp", default="morg2",
         choices=["mqn", "xfp", "ecfp4", 
             "morg2", "morg3", "rdk", "circular", "maccs"])
 
@@ -128,34 +170,51 @@ def main():
     X = read_smiles(smiles_filename)
     y = load_labels().A
 
-    # idx = range(1000)
+    # filter out for compounds that hit at least min_hits targets
+    min_hits = 10
 
-    # X = X[idx]
-    # y = y[idx, ]
+    # remove any targets that are hit/not hit by less than 10 compounds
+    min_compounds = 10
 
-    # idx = np.logical_and(y.sum(0) >= 10, (1-y).sum(0) >=10)
-    # y = y[:,idx]
+    X, y = filter_training_data(X, y, 
+        min_compounds=min_compounds, 
+        min_target_hits=min_hits)
 
     assert X.shape[0] == y.shape[0]
-    
+    assert y.any(axis=1).all()
+    assert (1-y).any(axis=1).all()
+    assert not y.all(axis=0).any()
+    assert not (1-y).all(axis=0).any()
+
     print ("model is", args.model)
     if args.model == "stack":
-        model = StackedPPB2()
+        model = StackedPPB2(
+            fps=["maccs", "rdk", "morg2"],
+            models=["nn+nb"]
+        )
     else:
         model = PPB2(fp=args.fp, model_name=args.model)
 
     cross_validation_results = cross_validation(
         X, y, model,
-        n_splits=5)
-    cross_validation_results.name = "{}-{}".format(
-        args.fp, args.model)
+        n_splits=5,
+        k=5)
+    if args.model == "stack":
+        name = "{}-({})".format(
+            args.model, "&".join((name 
+                    for name, _ in model.classifiers)))
+    else:
+        name = "{}-{}".format(
+            args.fp, args.model)
+    cross_validation_results.name = name
+    print (cross_validation_results)
 
-    results_dir = "results"
+    results_dir = os.path.join("results", )
     os.makedirs(results_dir, exist_ok=True)
 
+   
     results_filename = os.path.join(results_dir, 
-        "{}-{}-results.pkl".format(args.fp, 
-        args.model,))
+        "{}-results.pkl".format(name))
     print ("picking results to", results_filename)
     with open(results_filename, "wb") as f:
         pkl.dump(cross_validation_results, f, pkl.HIGHEST_PROTOCOL)

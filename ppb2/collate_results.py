@@ -4,27 +4,32 @@ import itertools
 
 import pandas as pd 
 
+import pickle as pkl
+
 
 def main():
 
-    fps = ("ecfp4", "morg2", "circular", "MACCS")
-    models = ("nb", "nn", "nn+nb")
+    fps = ("morg2", "morg3", "rdk", "circular", "maccs")
+    models = ("nb", "nn", "nn+nb", "lr", "bag", "svc")
 
-    results_dir = os.path.join(".")
+    results_dir = os.path.join("results", )
 
     collated_results = []
 
     for fp, model in itertools.product(fps, models):
         filename = os.path.join(results_dir, 
-            "{}-{}-results.csv".format(fp, model))
+            "{}-{}-results.pkl".format(fp, model))
         print ("reading", filename)
         assert os.path.exists(filename)
 
-        df = pd.read_csv(filename, index_col=0)
-        df.index = df.index.map(lambda x: fp+"-"+x)
-        collated_results.append(df)
+        with open(filename, "rb") as f:
+            results = pkl.load(f)
 
-    collated_results = pd.concat(collated_results, axis=0)
+        # df = pd.read_csv(filename, index_col=0)
+        # df.index = df.index.map(lambda x: fp+"-"+x)
+        collated_results.append(results)
+
+    collated_results = pd.DataFrame(collated_results, axis=0)
     collated_results_filename = os.path.join(results_dir, 
         "PPB2-collated_results.csv")
     print("writing to", collated_results_filename)

@@ -34,6 +34,7 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         fps=["morg2", "rdk", "maccs"], 
         models=["nn+nb", ],
         n_splits=5,
+        stack_method="predict_proba",
         final_estimator=LogisticRegressionCV()):
 
         self.classifiers = [
@@ -47,7 +48,8 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             "using the following models:", self.classifiers)
 
         self.n_splits = n_splits
-        
+        assert stack_method in {"predict_proba", "predict"}
+        self.stack_method = stack_method
         self.final_estimator = final_estimator
 
         # self.model = StackingClassifier(classifiers,
@@ -89,7 +91,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             for split_no, (train, test) in enumerate(self.split.split(X, y)):
                 print ("processing split", split_no+1, "/", self.n_splits)
                 classifier.fit(X[train], y[train])
-                meta_preds[test, i] = classifier.predict(X[test]) # multi target precit
+                if self.stack_method == "predict_proba":
+                    meta_preds[test, i] = classifier.predict_proba(X[test]) # multi target predict probs (for positive class)
+                else:
+                    meta_preds[test, i] = classifier.predict(X[test]) # multi target predict
 
         if not isinstance(y, np.ndarray):
             y = y.A
@@ -123,7 +128,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         for i, (name, classifier) in enumerate(self.classifiers):
             print ("performing prediction with classifier:", name)
             assert classifier.check_is_fitted()
-            meta_preds[:,i] = classifier.predict(X)
+            if self.stack_method == "predict_proba":
+                meta_preds[:,i] = classifier.predict_proba(X)
+            else:
+                meta_preds[:,i] = classifier.predict(X)
         
         # final estimator
         if self.multi_label:
@@ -150,7 +158,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
 
         for i, (name, classifier) in enumerate(self.classifiers):
             assert classifier.check_is_fitted()
-            meta_preds[:,i] = classifier.predict(X)
+            if self.stack_method == "predict_proba":
+                meta_preds[:,i] = classifier.predict_proba(X)
+            else:
+                meta_preds[:,i] = classifier.predict(X)
         
         # final estimator
         if self.multi_label:
@@ -245,6 +256,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "nearest compounds to each query")
         idx = self.model.kneighbors(X,
             return_distance=False)
+        print ("nerighbours determined")
 
         training_samples = load_training_fingerprints(self.X, self.fp)
         training_labels = self.y
@@ -299,6 +311,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
     def _local_nb_prediction(self, 
         queries, X, y,
         mode="predict"):
+        print ("fitting unique NB models for each query")
 
         n_queries = queries.shape[0]
         if self.multi_label:
@@ -317,8 +330,9 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 y[query_idx],
                 mode=mode)
 
-            # print ("completed fitting NB for query",
-                # query_idx+1)
+            if query_idx % 10 == 0:
+                print ("completed fitting NB for query",
+                    query_idx+1, "/", n_queries)
             
         return predictions
 

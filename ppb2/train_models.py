@@ -57,8 +57,12 @@ def main():
     model_dir = os.path.join("models", )
     os.makedirs(model_dir, exist_ok=True)
 
-    model_filename = os.path.join(model_dir, 
-        "{}-{}.pkl".format(args.fp, args.model))
+    if args.model == "stack":
+        model_filename = os.path.join(model_dir, 
+            "{}.pkl".format(args.model))
+    else:
+        model_filename = os.path.join(model_dir, 
+            "{}-{}.pkl".format(args.fp, args.model))
 
     if not os.path.exists(model_filename):
 

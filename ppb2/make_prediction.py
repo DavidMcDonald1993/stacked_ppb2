@@ -27,8 +27,6 @@ def parse_args():
         choices=["nn", "nb", "nn+nb", 
             "lr", "svc", "bag", "stack"])
 
-    # parser.add_argument("--target_id", type=int)
-
     parser.add_argument("--query",)
     parser.add_argument("--output")
 
@@ -55,8 +53,12 @@ def main():
 
     # target_id = args.target_id
 
-    model_filename = os.path.join("models", 
-        "{}-{}.pkl".format(args.fp, args.model))
+    if args.model == "stack":
+        model_filename = os.path.join(model_dir, 
+            "{}.pkl".format(args.model))
+    else:
+        model_filename = os.path.join(model_dir, 
+            "{}-{}.pkl".format(args.fp, args.model))
     assert os.path.exists(model_filename)
     print ("reading model from", model_filename)
     with open(model_filename, "rb") as f:
