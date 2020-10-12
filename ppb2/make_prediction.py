@@ -18,16 +18,17 @@ from get_fingerprints import read_smiles
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--fp", default="morg2",
-        choices=["mqn", "xfp", "ecfp4", 
-        "morg2", "morg3", "rdk", 
-        "circular", "maccs"])
+    # parser.add_argument("--fp", default="morg2",
+    #     choices=["mqn", "xfp", "ecfp4", 
+    #     "morg2", "morg3", "rdk", 
+    #     "circular", "maccs"])
 
-    parser.add_argument("--model", default="nb",
-        choices=["nn", "nb", "nn+nb", 
-            "lr", "svc", "bag", "stack"])
+    # parser.add_argument("--model", default="nb",
+    #     choices=["nn", "nb", "nn+nb", 
+    #         "lr", "svc", "bag", "stack"])
 
     parser.add_argument("--query",)
+    parser.add_argument("--model",)
     parser.add_argument("--output")
 
     parser.add_argument("-k", default=200, 
@@ -39,6 +40,7 @@ def main():
 
     args = parse_args()
     assert args.query is not None
+    assert args.model is not None
     assert args.output is not None
 
 
@@ -50,15 +52,15 @@ def main():
     with open(target_mapping_filename, "rb") as f:
         target_mapping = pkl.load(f)
 
-
     # target_id = args.target_id
-
-    if args.model == "stack":
-        model_filename = os.path.join(model_dir, 
-            "{}.pkl".format(args.model))
-    else:
-        model_filename = os.path.join(model_dir, 
-            "{}-{}.pkl".format(args.fp, args.model))
+    # if args.model == "stack":
+    #     model_filename = os.path.join(model_dir, 
+    #         "{}.pkl".format(args.model))
+    # else:
+    #     model_filename = os.path.join(model_dir, 
+    #         "{}-{}.pkl".format(args.fp, args.model))
+    model_filename = args.model 
+    assert model_filename.endswith(".pkl")
     assert os.path.exists(model_filename)
     print ("reading model from", model_filename)
     with open(model_filename, "rb") as f:

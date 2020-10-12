@@ -12,8 +12,6 @@ from models import PPB2, StackedPPB2
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument("--target_id", type=int)
-
     parser.add_argument("--fp", default="morg2",
         choices=["mqn", "xfp", "ecfp4", 
         "morg2", "morg3", "rdk",
@@ -28,6 +26,7 @@ def parse_args():
 def main():
 
     args = parse_args()
+    assert args.fp not in {"mqn", "xfp", "ecfp4"}
 
     print ("Fingerprint type:", args.fp)
     print ("Model type:", args.model)
@@ -37,19 +36,13 @@ def main():
     training_data_filename = os.path.join(data_dir,
         "compounds.smi") # chembl 22
     X = read_smiles(training_data_filename)
-   
     Y = load_labels().A
 
-    # idx = range(1000)
-
-    # X = X[idx]
-    # Y = Y[idx, ]
-
-    # idx = np.logical_and(Y.any(0), (1-Y).any())
-    # Y = Y[:,idx]
-
     if args.model == "stack":
-        model = StackedPPB2()
+        model = StackedPPB2(
+            fps=["maccs", "rdk", "morg2"],
+            models=["nn+nb"]
+        )
     else:
         model = PPB2(fp=args.fp, 
             model_name=args.model, )
@@ -59,7 +52,9 @@ def main():
 
     if args.model == "stack":
         model_filename = os.path.join(model_dir, 
-            "{}.pkl".format(args.model))
+            "{}-({}).pkl".format(args.model,
+                "&".join((name
+                    for name, _ in model.classifiers))))
     else:
         model_filename = os.path.join(model_dir, 
             "{}-{}.pkl".format(args.fp, args.model))

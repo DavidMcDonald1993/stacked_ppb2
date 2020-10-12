@@ -3,12 +3,12 @@
 #SBATCH --job-name=TRAINMODELS
 #SBATCH --output=TRAINMODELS_%A_%a.out
 #SBATCH --error=TRAINMODELS_%A_%a.err
-#SBATCH --array=0-9
+#SBATCH --array=0-4
 #SBATCH --time=10-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --mem=20G
 
-models=(nn+nb stack)
+models=(nn+nb)
 fps=(morg2 morg3 maccs circular rdk)
 
 num_models=${#models[@]}

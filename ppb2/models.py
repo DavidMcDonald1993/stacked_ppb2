@@ -223,7 +223,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
         elif model_name == "lr":
             self.model = LogisticRegressionCV(
                 max_iter=1000,
-                # multi_class="ovr",
                 n_jobs=1)
         if self.multi_label and model_name in {"nb", "svc", "bag", "lr"}:
             self.model = OneVsRestClassifier(
