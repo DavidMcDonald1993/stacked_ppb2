@@ -103,7 +103,6 @@ def cross_validation(
         assert y_test.shape[0] == predictions.shape[0] == probs.shape[0]
         assert y_test.shape[1] == predictions.shape[1] == probs.shape[1]
 
-
         print ("computing results for split", split+1)
         results[split] = compute_measures(y_test, predictions, probs)
         print ("completed split", split+1)
@@ -171,10 +170,10 @@ def main():
     y = load_labels().A
 
     # filter out for compounds that hit at least min_hits targets
-    min_hits = 10
+    min_hits = 5
 
     # remove any targets that are hit/not hit by less than 10 compounds
-    min_compounds = 10
+    min_compounds = 5
 
     X, y = filter_training_data(X, y, 
         min_compounds=min_compounds, 
@@ -189,8 +188,16 @@ def main():
     print ("model is", args.model)
     if args.model == "stack":
         model = StackedPPB2(
-            fps=["maccs", "rdk", "morg2"],
-            models=["nn+nb"]
+            # fps=["maccs", "rdk", "morg2"],
+            # models=["nn+nb"],
+            # stack_method="predict_proba",
+            fps=["maccs", "circular"],# +\
+                # ["rdk", "morg2"],
+            models=["nn+nb"],
+            stack_method="predict_proba",
+            # fps=["maccs", "circular", ],
+            # models=["nb", "nn+nb", "bag"],
+            # stack_method="predict_proba",
         )
     else:
         model = PPB2(fp=args.fp, model_name=args.model)

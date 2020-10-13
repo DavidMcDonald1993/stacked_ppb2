@@ -25,11 +25,9 @@ def main():
         with open(filename, "rb") as f:
             results = pkl.load(f)
 
-        # df = pd.read_csv(filename, index_col=0)
-        # df.index = df.index.map(lambda x: fp+"-"+x)
         collated_results.append(results)
 
-    collated_results = pd.DataFrame(collated_results, axis=0)
+    collated_results = pd.DataFrame(collated_results, )
     collated_results_filename = os.path.join(results_dir, 
         "PPB2-collated_results.csv")
     print("writing to", collated_results_filename)

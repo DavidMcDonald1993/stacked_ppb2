@@ -192,8 +192,8 @@ def get_MACCs(X, parallel=True):
     return np.array(fps)
 
 def compute_fp(X, fp, n_bits=1024):
-    print ("Computing", fp, "fingerpints for", X.shape[0],
-        "SMILES")
+    print ("computing", fp, "fingerpints for", 
+        X.shape[0], "SMILES")
     if fp == "morg2":
         X = get_morg(X, n_bits=n_bits)
     elif fp == "morg3":
@@ -207,7 +207,7 @@ def compute_fp(X, fp, n_bits=1024):
     else:
         raise NotImplementedError
 
-    print ("Computed", fp, "fingerprint")
+    print ("computed", fp, "fingerprint")
     
     return X
 

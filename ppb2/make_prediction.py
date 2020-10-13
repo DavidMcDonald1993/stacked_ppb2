@@ -15,6 +15,8 @@ import pickle as pkl
 
 from get_fingerprints import read_smiles
 
+from pathlib import Path
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -46,19 +48,13 @@ def main():
 
     # load target name mappings
     target_mapping_filename = os.path.join("data",
-        "id_to_gene_symbol.pkl")
+        "id_to_uniprot.pkl")
     print ("reading target mapping from",
         target_mapping_filename)
     with open(target_mapping_filename, "rb") as f:
         target_mapping = pkl.load(f)
 
-    # target_id = args.target_id
-    # if args.model == "stack":
-    #     model_filename = os.path.join(model_dir, 
-    #         "{}.pkl".format(args.model))
-    # else:
-    #     model_filename = os.path.join(model_dir, 
-    #         "{}-{}.pkl".format(args.fp, args.model))
+
     model_filename = args.model 
     assert model_filename.endswith(".pkl")
     assert os.path.exists(model_filename)
@@ -92,7 +88,9 @@ def main():
         columns=targets)
 
     output_dir = os.path.join(
-        args.output, "{}-{}".format(args.fp, args.model, ))
+        args.output, 
+        "{}-{}".format(Path(model_filename).stem, Path(query_filename).stem)
+        )
     os.makedirs(output_dir, exist_ok=True)
 
     prediction_filename = os.path.join(output_dir,
@@ -105,20 +103,9 @@ def main():
     print ("writing probs to", probs_filename)
     prediction_probs.to_csv(probs_filename)
 
-    
-
-    # print ("pickling predictions to",
-    #     prediction_filename)
-    # with open(prediction_filename, "wb") as f:
-    #     pkl.dump(prediction, f, pkl.HIGHEST_PROTOCOL)
-
-    # print ("pickling probs to",
-    #     probs_filename)
-    # with open(probs_filename, "wb") as f:
-    #     pkl.dump(prediction_probs, f, pkl.HIGHEST_PROTOCOL)
-
-    n = 100
     # rank top n targets for each query
+    n = 100
+
     prediction_probs = prediction_probs.values
     idx = prediction_probs.argsort(axis=-1,)[:, ::-1][:,:n]
     predictions_ranked_filename = os.path.join(output_dir,

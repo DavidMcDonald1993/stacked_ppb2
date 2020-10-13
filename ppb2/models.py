@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 import itertools
+import functools
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
@@ -18,6 +19,8 @@ from sklearn.base import clone
 
 from sklearn.utils.validation import check_is_fitted
 
+from sklearn.metrics import pairwise_distances
+
 from sklearn.model_selection import KFold, StratifiedKFold
 from skmultilearn.model_selection import IterativeStratification
 
@@ -26,6 +29,7 @@ from sklearn.exceptions import NotFittedError
 from get_fingerprints import compute_fp, load_training_fingerprints
 
 # from multi_label_stack import StackingClassifier
+import multiprocessing as mp
 
 class StackedPPB2(BaseEstimator, ClassifierMixin):  
     """Stacked PPB2 model"""
@@ -35,7 +39,8 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         models=["nn+nb", ],
         n_splits=5,
         stack_method="predict_proba",
-        final_estimator=LogisticRegressionCV()):
+        final_estimator=LogisticRegressionCV(),
+        passthrough=False):
 
         self.classifiers = [
             ("{}-{}".format(fp, model), 
@@ -51,6 +56,7 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         assert stack_method in {"predict_proba", "predict"}
         self.stack_method = stack_method
         self.final_estimator = final_estimator
+        self.passthrough = passthrough
 
         # self.model = StackingClassifier(classifiers,
         #     n_jobs=1,
@@ -79,7 +85,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             print ("fitting in the multi-target setting")
             print ("number of targets:", y.shape[1])
             self.multi_label = True
-            # self.split = KFold(n_splits=self.n_splits)
             self.split = IterativeStratification(n_splits=self.n_splits,
                 order=1)
             self.n_targets = y.shape[1]
@@ -95,6 +100,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
                     meta_preds[test, i] = classifier.predict_proba(X[test]) # multi target predict probs (for positive class)
                 else:
                     meta_preds[test, i] = classifier.predict(X[test]) # multi target predict
+                print ("completed split", split_no+1, "/", self.n_splits)
+                print ()
+            print ("completed classifier", name, )
+            print ()
 
         if not isinstance(y, np.ndarray):
             y = y.A
@@ -113,6 +122,9 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             print ("fitting final estimator")
             self.final_estimator.fit(meta_preds, y)
 
+        print ("completed fitting of final estimators")
+        print ()
+
         return self
 
     def predict(self, X):
@@ -121,7 +133,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
 
         if self.multi_label:
             meta_preds = np.empty((X.shape[0], len(self.classifiers), self.n_targets, ))
-
         else: 
             meta_preds = np.empty((X.shape[0], len(self.classifiers), ))
 
@@ -197,7 +208,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         assert X.shape[0] == y.shape[0]
 
-        print ("fitting PPB2 model to", X.shape[0], "SMILES")
+        print ("fitting PPB2 model", "({})".format(self.model_name),
+            "to", X.shape[0], "SMILES")
 
         if  len(y.shape) == 1:
             print ("fitting in the single-target setting")
@@ -208,7 +220,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.multi_label = True
 
         model_name = self.model_name   
-        if "nn" in model_name:
+        if model_name == "nn":
             self.model = KNeighborsClassifier(
                 n_neighbors=self.k,
                 metric="jaccard", 
@@ -232,14 +244,16 @@ class PPB2(BaseEstimator, ClassifierMixin):
         if model_name == "nn+nb": # keep references for local NB fitting
             self.X = X 
             self.y = y
+            self.model = None
 
         # covert X to fingerprint
         X = load_training_fingerprints(X, self.fp)
 
         assert X.shape[0] == y.shape[0]
 
-        print ("fitting model to fingerprints")
-        self.model.fit(X, y)
+        if self.model is not None:
+            print ("fitting model to fingerprints")
+            self.model.fit(X, y)
 
         return self
 
@@ -249,18 +263,28 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model.n_neighbors = k
 
     def _determine_k_closest_samples(self, X):
-        assert isinstance(self.model, KNeighborsClassifier)
-        assert self.k == self.model.n_neighbors
-        print ("determining", self.k, 
-            "nearest compounds to each query")
-        idx = self.model.kneighbors(X,
-            return_distance=False)
-        print ("nerighbours determined")
+        # assert isinstance(self.model, KNeighborsClassifier)
+        # assert self.k == self.model.n_neighbors
+        # print ("determining", self.k, 
+        #     "nearest compounds to each query")
+        # idx = self.model.kneighbors(X,
+        #     return_distance=False)
+        # print ("neighbours determined")
 
         training_samples = load_training_fingerprints(self.X, self.fp)
         training_labels = self.y
         if not isinstance(training_labels, np.ndarray):
             training_labels = training_labels.A
+
+        print ("determining", self.k, 
+            "nearest compounds to each query")
+        dists = pairwise_distances(X, training_samples, 
+            metric="jaccard", n_jobs=-1, )
+        idx = dists.argsort(axis=-1)[:,:self.k]
+        print ("neighbours determined")
+
+        assert idx.shape[0] == X.shape[0]
+        assert idx.shape[1] == self.k
 
         k_nearest_samples = training_samples[idx]
         k_nearest_labels = training_labels[idx]
@@ -270,6 +294,10 @@ class PPB2(BaseEstimator, ClassifierMixin):
     def _fit_nb(self,
         query, X, y, 
         mode="predict"):
+
+
+        if len(query.shape) == 1:
+            query = query[None, :]
         
         assert query.shape[0] == 1
 
@@ -277,13 +305,16 @@ class PPB2(BaseEstimator, ClassifierMixin):
             assert len(y.shape) == 2
             nb = OneVsRestClassifier(
                 BernoulliNB(alpha=1.),
-                n_jobs=-1)
+                n_jobs=1)
 
             pred = np.zeros(y.shape[1])
+            # probs = np.zeros(y.shape[1])
+            
             ones_idx = y.all(axis=0)
             zeros_idx = (1-y).all(axis=0)
 
             pred[ones_idx] = 1
+            # probs[ones_idx] = 1
 
             # only fit on targets with pos and neg examples
             idx = ~np.logical_or(ones_idx, zeros_idx)
@@ -291,6 +322,9 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 nb.fit(X, y[:,idx])
                 pred[idx] = (nb.predict(query)[0] if mode=="predict"
                     else nb.predict_proba(query)[0])
+                # pred[idx] = nb.predict(query)[0]
+                # probs[idx] = nb.predict_proba(query)[0]
+            # return pred, probs
             return pred
 
         else:
@@ -298,42 +332,58 @@ class PPB2(BaseEstimator, ClassifierMixin):
             nb = BernoulliNB(alpha=1.)
 
             if y.all():
-                return 1
+                return 1, 1
             if (1-y).all():
-                return 0
+                return 0, 0
 
             nb.fit(X, y)
 
             return (nb.predict(query)[0] if mode=="predict"
                 else nb.predict_proba(query)[0])
+            # return (nb.predict(query)[0], nb.predict_proba(query)[0])
 
     def _local_nb_prediction(self, 
         queries, X, y,
         mode="predict"):
-        print ("fitting unique NB models for each query")
+        print ("fitting unique NB models for each query",
+            "in mode", mode)
 
         n_queries = queries.shape[0]
         if self.multi_label:
             assert len(y.shape) == 3
             n_targets = y.shape[-1]
-            predictions = np.zeros((n_queries, n_targets))
+            # predictions = np.zeros((n_queries, n_targets))
 
-        else:
-            predictions = np.zeros((n_queries, ))
+        # else:
+            # predictions = np.zeros((n_queries, ))
+        # probs = np.zeros_like(predictions)
 
-        for query_idx in range(n_queries):
+        # for query_idx in range(n_queries):
 
-            predictions[query_idx] = self._fit_nb(
-                queries[query_idx:query_idx+1],
-                X[query_idx],
-                y[query_idx],
-                mode=mode)
+        #     # predictions[query_idx], probs[query_idx] = self._fit_nb(
+        #     predictions[query_idx] = self._fit_nb(
+        #         queries[query_idx:query_idx+1],
+        #         X[query_idx],
+        #         y[query_idx],
+        #         mode=mode)
 
-            if query_idx % 10 == 0:
-                print ("completed fitting NB for query",
-                    query_idx+1, "/", n_queries)
-            
-        return predictions
+        #     if query_idx > 0 and query_idx % 50 == 0:
+        #         print ("completed fitting NB for query",
+        #             query_idx, "/", n_queries,
+        #             "in mode", mode)
+        
+        with mp.Pool(processes=mp.cpu_count()) as p:
+            predictions = p.starmap(
+                functools.partial(self._fit_nb, mode=mode),
+                zip(queries, X, y))
+
+        predictions = np.array(predictions)
+        assert predictions.shape[0] == n_queries
+
+        if self.multi_label:
+            assert predictions.shape[1] == n_targets
+
+        return predictions#, probs
 
  
     def predict(self, X):
@@ -350,7 +400,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 X,
                 k_nearest_samples,
                 k_nearest_labels,
-                mode="predict")
+                mode="predict")#[0] # return predictions only
         else:
             return self.model.predict(X)
 
@@ -367,7 +417,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 X,
                 k_nearest_samples,
                 k_nearest_labels,
-                mode="prob")
+                mode="predict_proba")#[1] # return probs only
 
         if self.model_name == "nn":
             probs = self.model.predict_proba(X)
@@ -379,6 +429,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
             return self.model.predict_proba(X)
 
     def check_is_fitted(self):
+        if self.model is None:
+            return True
         try:
              check_is_fitted(self.model)
              return True
