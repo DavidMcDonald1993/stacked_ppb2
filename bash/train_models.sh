@@ -5,7 +5,7 @@
 #SBATCH --error=TRAINMODELS_%A_%a.err
 #SBATCH --array=0-4
 #SBATCH --time=10-00:00:00
-#SBATCH -c=10
+#SBATCH -c 10
 #SBATCH --mem=20G
 
 models=(nn+nb)

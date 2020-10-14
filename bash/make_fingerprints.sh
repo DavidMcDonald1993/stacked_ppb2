@@ -4,7 +4,7 @@
 #SBATCH --output=FPS.out
 #SBATCH --error=FPS.err
 #SBATCH --time=10-00:00:00
-#SBATCH -c=10
+#SBATCH -c 10
 #SBATCH --mem=5G
 
 module purge
