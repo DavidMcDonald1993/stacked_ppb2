@@ -189,8 +189,8 @@ def main():
     print ("model is", args.model)
     if args.model == "stack":
         model = StackedPPB2(
-            # fps=["maccs", "rdk", "morg2"],
-            # models=["nn+nb"],
+            fps=["rdk_maccs", "rdk", "morg2"],
+            models=["nn+nb"],
             # stack_method="predict_proba",
             # fps=["maccs", "circular"],# +\
             #     # ["rdk", "morg2"],
@@ -199,8 +199,8 @@ def main():
             # fps=["maccs", "circular", ],
             # models=["nb", "nn+nb", "bag"],
             # stack_method="predict_proba",
-            models=["nb"],
-            fps=["rdk", "morg2"],
+            # models=["nb"],
+            # fps=["rdk", "morg2"],
         )
     else:
         model = PPB2(fp=args.fp, model_name=args.model)

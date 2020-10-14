@@ -32,7 +32,8 @@ import functools
 def rdk_maccs_wrapper(smi, ):
     mol = Chem.MolFromSmiles(smi)
     assert mol.GetNumAtoms() > 0
-    return MACCSkeys.GenMACCSKeys(mol)
+    return [bool(bit) 
+        for bit in MACCSkeys.GenMACCSKeys(mol)]
     
 def get_rdk_maccs(smiles, parallel=True):
     '''input is a vector of SMILES'''

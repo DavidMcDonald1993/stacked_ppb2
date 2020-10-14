@@ -9,7 +9,7 @@ import pickle as pkl
 
 def main():
 
-    fps = ("morg2", "morg3", "rdk", "circular", "maccs")
+    fps = ("morg2", "morg3", "rdk", "rdk_maccs", "circular", "maccs")
     models = ("nb", "nn", "nn+nb", "lr", "bag", "svc")
 
     results_dir = os.path.join("results", )
