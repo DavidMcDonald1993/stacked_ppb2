@@ -3,13 +3,13 @@
 #SBATCH --job-name=EVALMODELS
 #SBATCH --output=EVALMODELS_%A_%a.out
 #SBATCH --error=EVALMODELS_%A_%a.err
-#SBATCH --array=0-29
+#SBATCH --array=0-35
 #SBATCH --time=10-00:00:00
-#SBATCH --ntasks=4
+#SBATCH -c=10
 #SBATCH --mem=20G
 
 models=(nb nn nn+nb svc bag lr)
-fps=(morg2 morg3 maccs circular rdk)
+fps=(morg2 morg3 maccs circular rdk rdk_maccs)
 
 num_models=${#models[@]}
 num_fps=${#fps[@]}

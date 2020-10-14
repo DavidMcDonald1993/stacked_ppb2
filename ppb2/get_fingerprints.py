@@ -10,7 +10,7 @@ import swifter
 import pickle as pkl
 
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import AllChem, MACCSkeys
 
 from openeye import oechem
 from openeye import oegraphsim
@@ -21,54 +21,87 @@ import functools
 
 # RDK
 
-def get_chems(smiles):
+# def get_rdk_mols(smiles):
+#     # from rdkit import Chem
+
+#     print ("building RDK chems from SMILES")
+#     return smiles.swifter.apply(
+#         lambda smi: Chem.MolFromSmiles(smi))
+
+
+def rdk_maccs_wrapper(smi, ):
+    mol = Chem.MolFromSmiles(smi)
+    assert mol.GetNumAtoms() > 0
+    return MACCSkeys.GenMACCSKeys(mol)
+    
+def get_rdk_maccs(smiles, parallel=True):
+    '''input is a vector of SMILES'''
+
+    # mols = get_rdk_mols(X)
+
+    print ("computing RDKit MACCS fingerprint")
+
+    if parallel:
+        with mp.Pool(processes=mp.cpu_count()) as p:
+            rdk_maccs_fingerprints = p.map(
+                rdk_maccs_wrapper,
+                smiles
+            )
+
+    else:
+        rdk_maccs_fingerprints = smiles.swifter.apply(
+            rdk_maccs_wrapper)
+        rdk_maccs_fingerprints = list(rdk_maccs_fingerprints.loc[smiles.index])
+
+    return np.array(rdk_maccs_fingerprints)
+
+
+def rdk_wrapper(smi, n_bits=1024):
     # from rdkit import Chem
+    mol = Chem.MolFromSmiles(smi)
+    assert mol.GetNumAtoms() > 0
+    return [bool(bit) 
+        for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )]
 
-    print ("building RDK chems from SMILES")
-    return smiles.swifter.apply(
-        lambda smi: Chem.MolFromSmiles(smi))
+def get_rdk(smiles, n_bits=1024, parallel=True):
+    '''input is a vector of SMILES'''
 
-def rdk_wrapper(x, n_bits):
-    # from rdkit import Chem
-    return [bool(y) 
-            for y in Chem.RDKFingerprint( x , fpSize=n_bits )]
+    # mols = get_rdk_mols(X)
 
-def get_rdk(X, n_bits=1024, parallel=True):
-    '''X is a vector of SMILES'''
-
-    chems = get_chems(X)
-
-    print ("computing RDKit fingerprint")
+    print ("computing RDKit topological fingerprint")
 
     if parallel:
         with mp.Pool(processes=mp.cpu_count()) as p:
             rdk_fingerprints = p.map(
                 functools.partial(rdk_wrapper,
                     n_bits=n_bits),
-                chems
+                smiles
             )
 
     else:
-        rdk_fingerprints = list(chems.swifter.apply(lambda x:
-            rdk_wrapper(x, n_bits=n_bits)
-                if x else None))
+        rdk_fingerprints = smiles.swifter.apply(lambda smi:
+            rdk_wrapper(smi, n_bits=n_bits)
+                )
+        rdk_fingerprints = list(rdk_fingerprints.loc[smiles.index])
 
     return np.array(rdk_fingerprints)
 
-def morg_wrapper(chem, 
-        radius, 
-        n_bits):
+def morg_wrapper(smi, 
+    radius, 
+    n_bits):
     # from rdkit.Chem import AllChem
+    mol = Chem.MolFromSmiles(smi)
+    assert mol.GetNumAtoms() > 0
     return [bool(bit) 
-        for bit in AllChem.GetMorganFingerprintAsBitVect(chem, 
+        for bit in AllChem.GetMorganFingerprintAsBitVect(mol, 
             radius=radius, 
             nBits=n_bits,
             useFeatures=True , )]
 
-def get_morg(X, radius=2, n_bits=1024, parallel=True):
-    '''X is a vector of SMILES'''
+def get_morg(smiles, radius=2, n_bits=1024, parallel=True):
+    '''input is a vector of SMILES'''
 
-    chems = get_chems(X) 
+    # mols = get_rdk_mols(X) 
 
     print ("computing MORG fingerprint")
     print ("nbits:", n_bits)
@@ -81,17 +114,16 @@ def get_morg(X, radius=2, n_bits=1024, parallel=True):
                     radius=radius, 
                     n_bits=n_bits,
                     ),
-                chems    
+                smiles    
             )
 
     else:
-        morgan_fingerprints = list(chems.swifter.apply(lambda x:
-            morg_wrapper( x, 
+        morgan_fingerprints = smiles.swifter.apply(lambda smi:
+            morg_wrapper( smi, 
                     radius=radius, 
-                    useFeatures=True ,
-                    nBits=n_bits)
-                if x else None
-            ))
+                    n_bits=n_bits)
+            )
+        morgan_fingerprints = list(morgan_fingerprints.loc[smiles.index])
 
     return np.array(morgan_fingerprints)
 
@@ -104,33 +136,35 @@ def get_bit_string(fp):
     assert any(s)
     return s
 
-def mol_wrapper(smi):
-    # from openeye import oechem
-    mol = oechem.OEGraphMol()
-    oechem.OESmilesToMol(mol, smi)
-    return mol
+# def mol_wrapper(smi):
+#     # from openeye import oechem
+#     mol = oechem.OEGraphMol()
+#     oechem.OESmilesToMol(mol, smi)
+#     return mol
 
-def get_mols(smiles, parallel=True):
-    assert isinstance(smiles, pd.Series)
+# def get_mols(smiles, parallel=True):
+#     assert isinstance(smiles, pd.Series)
 
-    print("building list of OpenEye molecules")
+#     print("building list of OpenEye molecules")
 
-    if parallel:
+#     if parallel:
 
-        with mp.Pool(processes=mp.cpu_count()) as p:
-            mols = p.map(mol_wrapper, 
-                    smiles)
+#         with mp.Pool(processes=mp.cpu_count()) as p:
+#             mols = p.map(mol_wrapper, 
+#                     smiles) # order maintaained
 
-    else:
-        mols = [mol_wrapper(smi) for smi in smiles]
+#     else:
+#         mols = [mol_wrapper(smi) for smi in smiles]
 
-    return mols
+#     return mols
 
-def circular_wrapper(mol, 
+def circular_wrapper(smi, 
     num_bits = 1024,
     min_radius = 2,
     max_radius = 2):
     # from openeye import oegraphsim
+    mol = oechem.OEGraphMol()
+    oechem.OESmilesToMol(mol, smi)
     fp = oegraphsim.OEFingerPrint()
     oegraphsim.OEMakeCircularFP(fp, mol, 
         num_bits, 
@@ -139,13 +173,16 @@ def circular_wrapper(mol,
         oegraphsim.OEFPBondType_DefaultPathBond)
     return get_bit_string(fp)
 
-def get_circular(X, 
+def get_circular(smiles, 
     num_bits = 1024,
     min_radius = 2,
     max_radius = 2,
     parallel=True):
+    '''
+    input is smiles
+    '''
    
-    mols = get_mols(X, parallel=parallel)
+    # mols = get_mols(X, parallel=parallel)
 
     print ("computing circular fingerprint")
 
@@ -155,73 +192,76 @@ def get_circular(X,
             fps = p.map(functools.partial(
                 circular_wrapper, num_bits=num_bits, min_radius=min_radius,
                 max_radius=max_radius),
-                mols)
+                smiles)
 
     else:
 
         fps = [
-            circular_wrapper(mol, 
+            circular_wrapper(smi, 
                 num_bits=num_bits, min_radius=min_radius,
                 max_radius=max_radius)
-            for mol in mols]
+            for smi in smiles]
 
     return np.array(fps)
 
-def maccs_wrapper(mol, ):
+def maccs_wrapper(smi, ):
     # from openeye import oegraphsim
+    mol = oechem.OEGraphMol()
+    oechem.OESmilesToMol(mol, smi)
     fp = oegraphsim.OEFingerPrint()
     oegraphsim.OEMakeMACCS166FP(fp, mol,)
     return get_bit_string(fp)
 
-
-def get_MACCs(X, parallel=True):
+def get_MACCs(smiles, parallel=True):
 
     print ("computing maccs fingerprint")
 
     # from openeye import oegraphsim
 
-    mols = get_mols(X, parallel=parallel)
+    # mols = get_mols(X, parallel=parallel)
 
     if parallel:
         with mp.Pool(processes=mp.cpu_count()) as p:
-            fps = p.map(maccs_wrapper, mols)
+            fps = p.map(maccs_wrapper, smiles)
 
     else:
-        fps = [maccs_wrapper(mol) for mol in mols]
+        fps = [maccs_wrapper(smi) for smi in smiles]
 
     return np.array(fps)
 
-def compute_fp(X, fp, n_bits=1024):
+def compute_fp(smiles, fp, n_bits=1024):
     print ("computing", fp, "fingerpints for", 
-        X.shape[0], "SMILES")
+        smiles.shape[0], "SMILES")
     if fp == "morg2":
-        X = get_morg(X, n_bits=n_bits)
+        fps = get_morg(smiles, n_bits=n_bits)
     elif fp == "morg3":
-        X = get_morg(X, radius=3, n_bits=n_bits)
+        fps = get_morg(smiles, radius=3, n_bits=n_bits)
     elif fp == "rdk":
-        X = get_rdk(X, n_bits=n_bits)
+        fps = get_rdk(smiles, n_bits=n_bits)
+    elif fp == "rdk_maccs":
+        fps = get_rdk_maccs(smiles)
     elif fp == "maccs":
-        X = get_MACCs(X)
+        fps = get_MACCs(smiles)
     elif fp == "circular":
-        X = get_circular(X)
+        fps = get_circular(smiles)
     else:
         raise NotImplementedError
 
     print ("computed", fp, "fingerprint")
     
-    return X
+    return fps
 
 def read_smiles(smiles_filename):
     print ("reading training compounds from", 
         smiles_filename)
 
-    X = pd.read_csv(smiles_filename, header=None, 
+    smiles = pd.read_csv(smiles_filename, header=None, 
         sep="\t", index_col=1)[0].astype("string")
     print ("number of training SMILES:", 
-        X.shape[0])
-    return X
+        smiles.shape[0])
+    return smiles
 
-def load_training_fingerprints(X, fp):
+def load_training_fingerprints(smiles, fp):
     fp_filename = os.path.join("data",
         "fingerprints", "{}.pkl".format(fp))
     print ("loading fingerprints from", 
@@ -229,8 +269,8 @@ def load_training_fingerprints(X, fp):
     # return np.load(fp_filename)
     with open(fp_filename, "rb") as f:
         fingerprints = pkl.load(f)
-    return np.array([fingerprints[x] 
-        for x in X])
+    return np.array([fingerprints[smi] 
+        for smi in smiles])
 
 def load_labels():
     labels_filename = os.path.join("data",
@@ -243,7 +283,8 @@ def load_labels():
 def main():
 
     fps = ("morg2", "morg3", 
-        "rdk", "maccs", "circular", )
+        "rdk", "rdk_maccs",
+        "maccs", "circular", )
 
     training_smiles_filename = os.path.join("data", 
         "compounds.smi")
@@ -257,12 +298,13 @@ def main():
         num_smiles, "compounds")
 
     fingerprint_directory = os.path.join("data", 
-        "fingerprints_test")
+        "fingerprints")
     os.makedirs(fingerprint_directory, exist_ok=True)
     
     for fp in fps:
         
-        fingerprints_filename = os.path.join(fingerprint_directory,
+        fingerprints_filename = os.path.join(
+            fingerprint_directory,
             "{}.pkl".format(fp))
 
         if os.path.exists(fingerprints_filename):
@@ -279,6 +321,9 @@ def main():
         # np.save(fingerprints_filename, fingerprints)
         with open(fingerprints_filename, "wb") as f:
             pkl.dump(fingerprints_dict, f, pkl.HIGHEST_PROTOCOL)
+
+        print ("completed fingerprint", fp)
+        print ()
         
 
 if __name__ == "__main__":

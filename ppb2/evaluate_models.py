@@ -150,7 +150,8 @@ def parse_args():
 
     parser.add_argument("--fp", default="morg2",
         choices=["mqn", "xfp", "ecfp4", 
-            "morg2", "morg3", "rdk", "circular", "maccs"])
+            "morg2", "morg3", "rdk", "rdk_maccs",
+            "circular", "maccs"])
 
     parser.add_argument("--model", default="nn+nb",
         choices=["nn", "nb", "nn+nb", 
@@ -191,13 +192,15 @@ def main():
             # fps=["maccs", "rdk", "morg2"],
             # models=["nn+nb"],
             # stack_method="predict_proba",
-            fps=["maccs", "circular"],# +\
-                # ["rdk", "morg2"],
-            models=["nn+nb"],
-            stack_method="predict_proba",
+            # fps=["maccs", "circular"],# +\
+            #     # ["rdk", "morg2"],
+            # models=["nn+nb"],
+            # stack_method="predict_proba",
             # fps=["maccs", "circular", ],
             # models=["nb", "nn+nb", "bag"],
             # stack_method="predict_proba",
+            models=["nb"],
+            fps=["rdk", "morg2"],
         )
     else:
         model = PPB2(fp=args.fp, model_name=args.model)

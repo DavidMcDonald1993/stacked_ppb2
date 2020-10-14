@@ -14,7 +14,7 @@ def parse_args():
 
     parser.add_argument("--fp", default="morg2",
         choices=["mqn", "xfp", "ecfp4", 
-        "morg2", "morg3", "rdk",
+        "morg2", "morg3", "rdk", "rdk_maccs",
         "circular", "maccs"])
 
     parser.add_argument("--model", default="nb",

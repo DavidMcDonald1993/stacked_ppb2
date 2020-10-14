@@ -248,6 +248,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         # covert X to fingerprint
         X = load_training_fingerprints(X, self.fp)
+        # X = compute_fp(X, self.fp)
 
         assert X.shape[0] == y.shape[0]
 
