@@ -3,7 +3,7 @@
 #SBATCH --job-name=TRAINMODELS
 #SBATCH --output=TRAINMODELS_%A_%a.out
 #SBATCH --error=TRAINMODELS_%A_%a.err
-#SBATCH --array=0-179
+#SBATCH --array=0-215
 #SBATCH --time=10-00:00:00
 #SBATCH -c 10
 #SBATCH --mem=10G
@@ -27,7 +27,7 @@ fp=${fps[$fps_id]}
 compounds=splits/${split}/train.smi 
 targets=splits/${split}/train.npz 
 
-output_dir=models/${split}/
+output_dir=models/${split}
 output_file=${output_dir}/${fp}-${model}.pkl
 
 if [ ! -f ${output_file} ]
