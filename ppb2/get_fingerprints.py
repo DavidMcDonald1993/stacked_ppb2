@@ -19,26 +19,27 @@ import multiprocessing as mp
 
 import functools
 
+from standardiser import standardise
+
 # RDK
 
-# def get_rdk_mols(smiles):
-#     # from rdkit import Chem
-
-#     print ("building RDK chems from SMILES")
-#     return smiles.swifter.apply(
-#         lambda smi: Chem.MolFromSmiles(smi))
-
+def get_rdk_mol(smi, perform_standardisation=True):
+    mol = Chem.MolFromSmiles(smi)
+    if perform_standardisation:
+        try:
+            mol = standardise.run(mol)
+        except standardise.StandardiseException as e:
+            pass
+    return mol
 
 def rdk_maccs_wrapper(smi, ):
-    mol = Chem.MolFromSmiles(smi)
+    mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
     return [bool(bit) 
         for bit in MACCSkeys.GenMACCSKeys(mol)]
     
 def get_rdk_maccs(smiles, parallel=True):
     '''input is a vector of SMILES'''
-
-    # mols = get_rdk_mols(X)
 
     print ("computing RDKit MACCS fingerprint")
 
@@ -58,16 +59,13 @@ def get_rdk_maccs(smiles, parallel=True):
 
 
 def rdk_wrapper(smi, n_bits=1024):
-    # from rdkit import Chem
-    mol = Chem.MolFromSmiles(smi)
+    mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
     return [bool(bit) 
         for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )]
 
 def get_rdk(smiles, n_bits=1024, parallel=True):
     '''input is a vector of SMILES'''
-
-    # mols = get_rdk_mols(X)
 
     print ("computing RDKit topological fingerprint")
 
@@ -90,8 +88,7 @@ def get_rdk(smiles, n_bits=1024, parallel=True):
 def morg_wrapper(smi, 
     radius, 
     n_bits):
-    # from rdkit.Chem import AllChem
-    mol = Chem.MolFromSmiles(smi)
+    mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
     return [bool(bit) 
         for bit in AllChem.GetMorganFingerprintAsBitVect(mol, 
@@ -101,8 +98,6 @@ def morg_wrapper(smi,
 
 def get_morg(smiles, radius=2, n_bits=1024, parallel=True):
     '''input is a vector of SMILES'''
-
-    # mols = get_rdk_mols(X) 
 
     print ("computing MORG fingerprint")
     print ("nbits:", n_bits)
@@ -252,15 +247,6 @@ def compute_fp(smiles, fp, n_bits=1024):
     
     return fps
 
-def read_smiles(smiles_filename):
-    print ("reading training compounds from", 
-        smiles_filename)
-
-    smiles = pd.read_csv(smiles_filename, header=None, 
-        sep="\t", index_col=1)[0].astype("string")
-    print ("number of training SMILES:", 
-        smiles.shape[0])
-    return smiles
 
 def load_training_fingerprints(smiles, fp):
     fp_filename = os.path.join("data",
@@ -273,13 +259,6 @@ def load_training_fingerprints(smiles, fp):
     return np.array([fingerprints[smi] 
         for smi in smiles])
 
-def load_labels():
-    labels_filename = os.path.join("data",
-        "targets.npz")
-    print ("loading labels from", labels_filename)
-    Y = sp.load_npz(labels_filename)
-    print ("labels shape is", Y.shape)
-    return Y # sparse format
 
 def main():
 

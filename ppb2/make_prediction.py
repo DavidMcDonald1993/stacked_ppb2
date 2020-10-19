@@ -20,15 +20,6 @@ from pathlib import Path
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument("--fp", default="morg2",
-    #     choices=["mqn", "xfp", "ecfp4", 
-    #     "morg2", "morg3", "rdk", 
-    #     "circular", "maccs"])
-
-    # parser.add_argument("--model", default="nb",
-    #     choices=["nn", "nb", "nn+nb", 
-    #         "lr", "svc", "bag", "stack"])
-
     parser.add_argument("--query",)
     parser.add_argument("--model",)
     parser.add_argument("--output")

@@ -31,23 +31,40 @@ from get_fingerprints import compute_fp, load_training_fingerprints
 # from multi_label_stack import StackingClassifier
 import multiprocessing as mp
 
+def build_model(args):
+    model = args.model
+    assert isinstance(model, list)
+
+    print ("model is", model[0])
+    if model[0] == "stack":
+        return StackedPPB2(
+            # fps=["rdk_maccs", "rdk", "morg2"],
+            models=model[1:]
+        )
+    else:
+        return PPB2(model=model[0])
+
 class StackedPPB2(BaseEstimator, ClassifierMixin):  
     """Stacked PPB2 model"""
 
     def __init__(self, 
-        fps=["morg2", "rdk", "maccs"], 
-        models=["nn+nb", ],
+        # fps=["morg2", "rdk", "maccs"], 
+        models=["morg2-nn+nb", "morg3-nn+nb"],
         n_splits=5,
         stack_method="predict_proba",
         final_estimator=LogisticRegressionCV(),
         passthrough=False):
 
+        # assert len(fps) == len(models)
+
         self.classifiers = [
-            ("{}-{}".format(fp, model), 
-                PPB2(fp=fp, model_name=model))
-            for fp, model in itertools.product(fps, models)
+            # ("{}-{}".format(fp, model), 
+            #     PPB2(fp=fp, model_name=model))
+            # for fp, model in zip(fps, models)
+            (model, PPB2(model=model))
+                for model in models
         ]
-        assert len(self.classifiers) == len(fps) * len(models)
+        assert len(self.classifiers)  == len(models)
 
         print ("building stacked PPB2 classifier",
             "using the following models:", self.classifiers)
@@ -57,6 +74,8 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         self.stack_method = stack_method
         self.final_estimator = final_estimator
         self.passthrough = passthrough
+        if passthrough:
+            raise NotImplementedError
 
         # self.model = StackingClassifier(classifiers,
         #     n_jobs=1,
@@ -193,11 +212,16 @@ class PPB2(BaseEstimator, ClassifierMixin):
     """PPB2 model"""
     
     def __init__(self, 
-        fp="morg2", 
-        model_name="nn+nb", 
+        model="morg2&nn+nb",
         k=200):
-        self.fp = fp
-        self.model_name = model_name
+        model = model.split("-")
+        assert len(model) == 2
+        self.fp = model[0]
+        assert self.fp in {"rdk", "morg2", "morg3", "rdk_maccs",
+            "circular", "maccs"}
+        self.model_name = model[1]
+        assert self.model_name in {"nn", "nb", "nn+nb",
+            "bag", "lr", "svc"}
         self.k = k
         
     def fit(self, X, y):
@@ -439,5 +463,4 @@ class PPB2(BaseEstimator, ClassifierMixin):
             return False
 
     def __str__(self):
-        return "Model name: " + self.model_name + ", fp: " + self.fp +\
-            ", k = {}".format(self.k)
+        return "PPB2({}-{})".format(self.fp, self.model_name)

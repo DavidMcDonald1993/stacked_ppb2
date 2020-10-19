@@ -196,5 +196,6 @@ dependencies:
     - pyqtchart==5.12
     - pyqtwebengine==5.12.1
     - scikit-multilearn==0.2.0
+    - standardiser==0.1.9
 prefix: /home/david/miniconda2/envs/ppb2_env
 
