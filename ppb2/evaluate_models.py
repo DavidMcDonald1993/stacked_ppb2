@@ -15,7 +15,6 @@ from skmultilearn.model_selection import IterativeStratification
 
 from scipy import sparse as sp
 
-from get_fingerprints import load_labels, read_smiles
 from models import build_model, get_model_filename, load_model
 from split_data import read_smiles, load_labels
 
@@ -184,7 +183,7 @@ def cross_validation(
         probs)
     test_results = pd.Series(test_results, 
         index=pd.Series(["test-{}".format(metric) for metric in metric_names],
-            name="metric"]))
+            name="metric"))
 
     return results.append(test_results)
 
