@@ -31,6 +31,8 @@ from get_fingerprints import compute_fp, load_training_fingerprints
 # from multi_label_stack import StackingClassifier
 import multiprocessing as mp
 
+import pickle as pkl
+
 def build_model(args):
     model = args.model
     assert isinstance(model, list)
@@ -38,11 +40,28 @@ def build_model(args):
     print ("model is", model[0])
     if model[0] == "stack":
         return StackedPPB2(
-            # fps=["rdk_maccs", "rdk", "morg2"],
             models=model[1:]
         )
     else:
         return PPB2(model=model[0])
+
+def get_model_filename(args):
+    model = args.model
+    assert isinstance(model, list)
+    if model[0] == "stack":
+        return "stack-({}).pkl".format("&".join(model[1:]))
+    else:
+        return "{}.pkl".format(model[0])
+
+def save_model(model, model_filename):
+    print ("pickling model to", model_filename)
+    with open(model_filename, "wb") as f:
+        pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
+
+def load_model(model_filename):
+    print ("reading model from", model_filename)
+    with open(model_filename, "rb") as f:
+        return pkl.load(f)
 
 class StackedPPB2(BaseEstimator, ClassifierMixin):  
     """Stacked PPB2 model"""

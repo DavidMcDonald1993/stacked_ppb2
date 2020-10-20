@@ -6,7 +6,7 @@
 #SBATCH --array=0-215
 #SBATCH --time=10-00:00:00
 #SBATCH -c 10
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 
 splits=(split_0 split_1 split_2 split_3 split_4 complete)
 models=(nn nb nn+nb svc lr bag)
@@ -20,15 +20,17 @@ split_id=$((SLURM_ARRAY_TASK_ID / (num_fps * num_models) % num_splits))
 model_id=$((SLURM_ARRAY_TASK_ID / num_fps % num_models))
 fps_id=$((SLURM_ARRAY_TASK_ID % num_fps))
 
-split=${splits[$split_id]}
-model=${models[$model_id]}
-fp=${fps[$fps_id]}
+split=${splits[${split_id}]}
+model=${models[${model_id}]}
+fp=${fps[${fps_id}]}
 
 compounds=splits/${split}/train.smi 
 targets=splits/${split}/train.npz 
 
+model=${fp}-${model}
+
 output_dir=models/${split}
-output_file=${output_dir}/${fp}-${model}.pkl
+output_file=${output_dir}/${model}.pkl
 
 if [ ! -f ${output_file} ]
 then
@@ -42,9 +44,11 @@ then
 
     args=$(echo --compounds ${compounds}\
         --targets ${targets}\
-        --model ${fp}-${model}\
+        --model ${model}\
         --path ${output_dir} \
         )
     # echo $args
+    ulimit -c 0
+
     python ppb2/train_model.py ${args}
 fi

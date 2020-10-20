@@ -30,20 +30,11 @@ then
     module load bluebear
     module load Anaconda3/2018.12
 
-    # pip install -r requirements.txt
-    # conda install --file spec-file.txt
-    # conda env update -f env.yml
-
-    # conda env create -f env.yml
     source activate ppb2_env
-    # conda install -c rdkit rdkit libboost=1.65.1 -y
-    # conda install -c openeye openeye-toolkits -y
-    # conda install -c conda-forge swifter -y
-    # pip install --user scikit-multilearn
-    # conda env update --file env.yml 
 
-    args=$(echo --model ${model}\
-        --fp ${fp}\
-        )
+    args=$(echo --model ${fp}-${model})
+
+    ulimit -c 0
+
     python ppb2/evaluate_models.py ${args}
 fi

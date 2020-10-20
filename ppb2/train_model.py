@@ -7,7 +7,7 @@ import pandas as pd
 import pickle as pkl 
 
 from split_data import read_smiles, load_labels
-from models import build_model
+from models import build_model, save_model
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -54,10 +54,11 @@ def main():
         print ("fitting PPB2 model")
         model.fit(X, Y)
 
-        print ("pickling trained model to", 
-            model_filename)
-        with open(model_filename, "wb") as f:
-            pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
+        # print ("pickling trained model to", 
+        #     model_filename)
+        # with open(model_filename, "wb") as f:
+        #     pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
+        save_model(model, model_filename)
 
 if __name__ == "__main__":
     main()
