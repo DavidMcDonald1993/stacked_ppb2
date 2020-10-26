@@ -20,29 +20,46 @@ from split_data import read_smiles, load_labels
 
 import pickle as pkl
 
-def compute_p_at_k(labels,
+import multiprocessing as mp
+
+def _compute_p_at_k(labels, pred, idx):
+    return precision_score(labels[idx], pred[idx])
+
+def compute_p_at_k(
+    labels,
     pred, 
-    probs, 
-    k=5):
+    probs,
+    k=5,
+    n_proc=8):
+
+    print ("computing precision at", k, "with", n_proc, "processes")
 
     # mask out any samples with less than k positives
     valid_compounds = labels.sum(axis=1) >= k
-    assert valid_compounds.sum() > 0
+    n_valid = valid_compounds.sum()
+    assert n_valid > 0
     labels = labels[valid_compounds]
     pred = pred[valid_compounds]
     probs = probs[valid_compounds]
 
     # precision at k
     idx = probs.argsort(axis=1)[:, -k:]
-    assert idx.shape[0] == n_queries
     assert idx.shape[1] == k
-    p_at_k = np.array([
-        precision_score(labels_[idx_], pred_[idx_])
-        for labels_, pred_, idx_ in 
-            zip(labels, pred, idx)
-    ])
+    assert idx.shape[0] == n_valid
+    if n_proc > 1:
+        with mp.Pool(processes=n_proc) as p:
+            p_at_k = np.array(p.starmap(_compute_p_at_k,
+                iterable=zip(labels, pred, idx)))
+    else:
+        p_at_k = np.array([
+            precision_score(labels_[idx_], pred_[idx_])
+            for labels_, pred_, idx_ in 
+                zip(labels, pred, idx)
+        ])
 
-    assert len(p_at_k) == valid_compounds.sum()
+    assert len(p_at_k) == n_valid
+
+    print ("computed precision at", k)
 
     return p_at_k
 
@@ -50,26 +67,47 @@ def compute_measures(
     labels,
     pred, 
     probs, 
-    k=5):  
+    k=5,
+    n_proc=8):  
 
-    print ("computing classification evaluaiton metrics")
+    print ("computing classification evaluation metrics")
 
     assert len(labels.shape) == len(pred.shape) == len(probs.shape) == 2
-    # assert (labels.sum(axis=1) >= k).all(), "must have at least k positive examples"
     n_queries = labels.shape[0]
 
-    p_at_k = compute_p_at_k(labels, pred, probs, k=k)
+    p_at_k = compute_p_at_k(labels, pred, probs, k=k, n_proc=n_proc)
 
-    labels = labels.T
-    pred = pred.T
-    probs = probs.T
+    # labels = labels.T
+    # pred = pred.T
+    # probs = probs.T
+    # # shape is now n_targets x n_compounds
 
-    roc = roc_auc_score(labels, probs, average=None)
-    ap = average_precision_score(labels, probs, average=None)
+    # roc = roc_auc_score(labels, probs, average=None)
+    with mp.Pool(processes=n_proc) as p:
+        roc = np.array(p.starmap(roc_auc_score, 
+            iterable=zip(labels, probs)))
+    print ("computed ROC")
+    # ap = average_precision_score(labels, probs, average=None)
+    with mp.Pool(processes=n_proc) as p:
+        ap = np.array(p.starmap(average_precision_score, 
+            iterable=zip(labels, probs)))
+    print ("computed AP")
 
-    f1 = f1_score(labels, pred, average=None )
-    precision = precision_score(labels, pred, average=None )
-    recall = recall_score(labels, pred, average=None )
+    # f1 = f1_score(labels, pred, average=None )
+    with mp.Pool(processes=n_proc) as p:
+        f1 = np.array(p.starmap(f1_score, 
+            iterable=zip(labels, pred)))
+    print ("computed F1")
+    # precision = precision_score(labels, pred, average=None )
+    with mp.Pool(processes=n_proc) as p:
+        precision = np.array(p.starmap(precision_score, 
+            iterable=zip(labels, pred)))
+    print ("computed precision")
+    # recall = recall_score(labels, pred, average=None )
+    with mp.Pool(processes=n_proc) as p:
+        recall = np.array(p.starmap(recall_score, 
+            iterable=zip(labels, pred)))
+    print ("computed recall")
 
     assert len(roc) == len(ap) == len(f1) == len(precision) == len(recall) == n_queries
 
@@ -81,8 +119,7 @@ def cross_validation(
     n_splits=5,
     k=5):
 
-    n_compounds = X.shape[0]
-    n_targets = Y.shape[1]
+    n_proc = args.n_proc
 
     metric_names = [
         "p@{}".format(k),
@@ -95,27 +132,6 @@ def cross_validation(
 
     results = np.zeros((n_splits, n_metrics))
 
-    # split = IterativeStratification(n_splits=n_splits, order=1, random_state=0)
-
-    # for split, (train_idx, test_idx) in enumerate(split.split(X, Y)):
-    #     print ("processing fold", split+1, "/", n_splits)
-        
-    #     X_train = X[train_idx]
-    #     X_test = X[test_idx]
-
-    #     y_train = Y[train_idx]
-    #     y_test = Y[test_idx]
-
-    #     assert not y_train.all(axis=-1).any()
-    #     assert not (1-y_train).all(axis=-1).any()
-
-    #     assert not y_test.all(axis=-1).any()    
-    #     assert not (1-y_test).all(axis=-1).any()
-        
-    #     n_queries = len(test_idx)
-
-    #     model.fit(X_train, y_train)
-
     for split in range(n_splits):
         print ("processing fold", split+1, "/", n_splits)
 
@@ -127,7 +143,7 @@ def cross_validation(
         X_test_filename = os.path.join("splits", "split_{}".format(split),
             "test.smi")
         assert os.path.exists(X_test_filename)
-        X = read_smiles(X_test_filename)
+        X_test = read_smiles(X_test_filename)
 
         Y_test_filename = os.path.join("splits", "split_{}".format(split),
             "test.npz")
@@ -141,7 +157,7 @@ def cross_validation(
         assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
 
         print ("computing results for split", split+1)
-        results[split] = compute_measures(Y_test, predictions, probs)
+        results[split] = compute_measures(Y_test, predictions, probs, n_proc=n_proc)
         print ("completed fold", split+1)
         print ("#########################")
         print ()
@@ -165,7 +181,7 @@ def cross_validation(
     X_test_filename = os.path.join("splits", "complete",
         "test.smi")
     assert os.path.exists(X_test_filename)
-    X = read_smiles(X_test_filename)
+    X_test = read_smiles(X_test_filename)
 
     Y_test_filename = os.path.join("splits", "complete",
         "test.npz")
@@ -175,8 +191,24 @@ def cross_validation(
     predictions = model.predict(X_test)
     probs = model.predict_proba(X_test)
     assert isinstance(probs, np.ndarray)
-    assert y_test.shape[0] == predictions.shape[0] == probs.shape[0]
-    assert y_test.shape[1] == predictions.shape[1] == probs.shape[1]
+    assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+    # assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
+
+
+    idx = np.logical_and(Y_test.any(axis=0,), (1-Y_test).any(axis=0))
+    Y_test = Y_test[:,idx]
+    predictions = predictions[:,idx]
+    probs = probs[:,idx]
+
+    idx = np.logical_and(Y_test.any(axis=1,), (1-Y_test).any(axis=1))
+    Y_test = Y_test[idx]
+    predictions = predictions[idx]
+    probs = probs[idx]
+
+    assert Y_test.any(axis=0).all()
+    assert (1-Y_test).any(axis=0).all()
+    assert Y_test.any(axis=1).all()
+    assert (1-Y_test).any(axis=1).all()
 
     test_results = compute_measures(Y_test, 
         predictions,
@@ -191,15 +223,10 @@ def cross_validation(
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument("--fp", default="morg2",
-    #     choices=["mqn", "xfp", "ecfp4", 
-    #         "morg2", "morg3", "rdk", "rdk_maccs",
-    #         "circular", "maccs"])
+    parser.add_argument("--model", 
+        default=["morg2-nn+nb"], nargs="+",)
 
-    parser.add_argument("--model", default=["morg2-nn+nb"], nargs="+",
-        # choices=["nn", "nb", "nn+nb", 
-            # "svc", "lr", "bag", "stack"]
-            )
+    parser.add_argument("--n_proc", default=8, type=int)
 
     return parser.parse_args()
 
@@ -208,17 +235,15 @@ def main():
     args = parse_args()
 
     cross_validation_results = cross_validation(
-        args.model,
+        args,
         n_splits=5,
         k=5)
 
     if args.model == "stack":
-        name = "{}-({})".format(
-            args.model, "&".join((name 
-                    for name, _ in model.classifiers)))
+        name = "stack-({})".format(
+            "&".join(args.model[1:]))
     else:
-        name = "{}-{}".format(
-            args.fp, args.model)
+        name = args.model[0]
     cross_validation_results.name = name
     print (cross_validation_results)
 

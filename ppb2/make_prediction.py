@@ -4,13 +4,6 @@ import argparse
 import numpy as np
 import pandas as pd 
 
-# from sklearn.neighbors import KNeighborsClassifier
-# from sklearn.naive_bayes import BernoulliNB
-# from sklearn.metrics import pairwise_distances
-# from sklearn.multiclass import OneVsRestClassifier
-
-# from scipy import sparse as sp
-
 import pickle as pkl 
 
 from get_fingerprints import read_smiles
@@ -24,7 +17,8 @@ def parse_args():
     parser.add_argument("--model",)
     parser.add_argument("--output")
 
-    parser.add_argument("-k", default=200, 
+    parser.add_argument("-k", 
+        default=200, 
         type=int)
 
     return parser.parse_args()

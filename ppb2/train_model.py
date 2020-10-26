@@ -15,14 +15,8 @@ def parse_args():
     parser.add_argument("--compounds")
     parser.add_argument("--targets")
     parser.add_argument("--path")
+    parser.add_argument("--n_proc", default=8, type=int)
 
-    # parser.add_argument("--fp", default="morg2",
-    #     choices=["morg2", "morg3", "rdk", "rdk_maccs",
-    #     "circular", "maccs"])
-
-    # parser.add_argument("--model", default="nb",
-    #     choices=["nn", "nb", "nn+nb", 
-    #     "lr", "svc", "bag", "stack"])
     parser.add_argument("--model", default=["morg2-nn+nb"], nargs="+")
 
     return parser.parse_args()
@@ -54,10 +48,6 @@ def main():
         print ("fitting PPB2 model")
         model.fit(X, Y)
 
-        # print ("pickling trained model to", 
-        #     model_filename)
-        # with open(model_filename, "wb") as f:
-        #     pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
         save_model(model, model_filename)
 
 if __name__ == "__main__":

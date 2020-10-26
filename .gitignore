@@ -4,5 +4,6 @@ predictions
 results 
 src_old 
 input
+splits
 
 sample_morg2_query.csv

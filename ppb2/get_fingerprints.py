@@ -38,13 +38,13 @@ def rdk_maccs_wrapper(smi, ):
     return [bool(bit) 
         for bit in MACCSkeys.GenMACCSKeys(mol)]
     
-def get_rdk_maccs(smiles, parallel=True):
+def get_rdk_maccs(smiles, n_proc=8):
     '''input is a vector of SMILES'''
 
     print ("computing RDKit MACCS fingerprint")
 
-    if parallel:
-        with mp.Pool(processes=mp.cpu_count()) as p:
+    if n_proc>1:
+        with mp.Pool(processes=n_proc) as p:
             rdk_maccs_fingerprints = p.map(
                 rdk_maccs_wrapper,
                 smiles
@@ -64,13 +64,13 @@ def rdk_wrapper(smi, n_bits=1024):
     return [bool(bit) 
         for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )]
 
-def get_rdk(smiles, n_bits=1024, parallel=True):
+def get_rdk(smiles, n_bits=1024, n_proc=8):
     '''input is a vector of SMILES'''
 
     print ("computing RDKit topological fingerprint")
 
-    if parallel:
-        with mp.Pool(processes=mp.cpu_count()) as p:
+    if n_proc>1:
+        with mp.Pool(processes=n_proc) as p:
             rdk_fingerprints = p.map(
                 functools.partial(rdk_wrapper,
                     n_bits=n_bits),
@@ -96,15 +96,15 @@ def morg_wrapper(smi,
             nBits=n_bits,
             useFeatures=True , )]
 
-def get_morg(smiles, radius=2, n_bits=1024, parallel=True):
+def get_morg(smiles, radius=2, n_bits=1024, n_proc=8):
     '''input is a vector of SMILES'''
 
     print ("computing MORG fingerprint")
     print ("nbits:", n_bits)
     print ("radius:", radius)
 
-    if parallel:
-        with mp.Pool(processes=mp.cpu_count()) as p:
+    if n_proc>1:
+        with mp.Pool(processes=n_proc) as p:
             morgan_fingerprints = p.map(
                 functools.partial(morg_wrapper, 
                     radius=radius, 
@@ -132,27 +132,6 @@ def get_bit_string(fp):
     assert any(s)
     return s
 
-# def mol_wrapper(smi):
-#     # from openeye import oechem
-#     mol = oechem.OEGraphMol()
-#     oechem.OESmilesToMol(mol, smi)
-#     return mol
-
-# def get_mols(smiles, parallel=True):
-#     assert isinstance(smiles, pd.Series)
-
-#     print("building list of OpenEye molecules")
-
-#     if parallel:
-
-#         with mp.Pool(processes=mp.cpu_count()) as p:
-#             mols = p.map(mol_wrapper, 
-#                     smiles) # order maintaained
-
-#     else:
-#         mols = [mol_wrapper(smi) for smi in smiles]
-
-#     return mols
 
 def circular_wrapper(smi, 
     num_bits = 1024,
@@ -173,7 +152,7 @@ def get_circular(smiles,
     num_bits = 1024,
     min_radius = 2,
     max_radius = 2,
-    parallel=True):
+    n_proc=8):
     '''
     input is smiles
     '''
@@ -182,9 +161,9 @@ def get_circular(smiles,
 
     print ("computing circular fingerprint")
 
-    if parallel:
+    if n_proc>1:
 
-        with mp.Pool(processes=mp.cpu_count()) as p:
+        with mp.Pool(processes=n_proc) as p:
             fps = p.map(functools.partial(
                 circular_wrapper, num_bits=num_bits, min_radius=min_radius,
                 max_radius=max_radius),
@@ -208,7 +187,7 @@ def maccs_wrapper(smi, ):
     oegraphsim.OEMakeMACCS166FP(fp, mol,)
     return get_bit_string(fp)
 
-def get_MACCs(smiles, parallel=True):
+def get_MACCs(smiles, n_proc=8):
 
     print ("computing maccs fingerprint")
 
@@ -216,8 +195,8 @@ def get_MACCs(smiles, parallel=True):
 
     # mols = get_mols(X, parallel=parallel)
 
-    if parallel:
-        with mp.Pool(processes=mp.cpu_count()) as p:
+    if n_proc>1:
+        with mp.Pool(processes=n_proc) as p:
             fps = p.map(maccs_wrapper, smiles)
 
     else:
@@ -225,21 +204,22 @@ def get_MACCs(smiles, parallel=True):
 
     return np.array(fps)
 
-def compute_fp(smiles, fp, n_bits=1024):
+def compute_fp(smiles, fp, n_bits=1024, n_proc=8):
     print ("computing", fp, "fingerpints for", 
-        smiles.shape[0], "SMILES")
+        smiles.shape[0], "SMILES",
+        "using", n_proc, "cores")
     if fp == "morg2":
-        fps = get_morg(smiles, n_bits=n_bits)
+        fps = get_morg(smiles, n_bits=n_bits, n_proc=n_proc)
     elif fp == "morg3":
-        fps = get_morg(smiles, radius=3, n_bits=n_bits)
+        fps = get_morg(smiles, radius=3, n_bits=n_bits, n_proc=n_proc)
     elif fp == "rdk":
-        fps = get_rdk(smiles, n_bits=n_bits)
+        fps = get_rdk(smiles, n_bits=n_bits, n_proc=n_proc)
     elif fp == "rdk_maccs":
-        fps = get_rdk_maccs(smiles)
+        fps = get_rdk_maccs(smiles, n_proc=n_proc)
     elif fp == "maccs":
-        fps = get_MACCs(smiles)
+        fps = get_MACCs(smiles, n_proc=n_proc)
     elif fp == "circular":
-        fps = get_circular(smiles)
+        fps = get_circular(smiles, n_proc=n_proc)
     else:
         raise NotImplementedError
 

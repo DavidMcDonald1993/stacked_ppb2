@@ -8,6 +8,8 @@
 #SBATCH -c 10
 #SBATCH --mem=20G
 
+N_PROC=10
+
 models=(nb nn nn+nb svc bag lr)
 fps=(morg2 morg3 maccs circular rdk rdk_maccs)
 
@@ -32,7 +34,7 @@ then
 
     source activate ppb2_env
 
-    args=$(echo --model ${fp}-${model})
+    args=$(echo --model ${fp}-${model} --n_proc ${N_PROC})
 
     ulimit -c 0
 

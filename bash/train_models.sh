@@ -8,6 +8,8 @@
 #SBATCH -c 10
 #SBATCH --mem=20G
 
+N_PROC=10
+
 splits=(split_0 split_1 split_2 split_3 split_4 complete)
 models=(nn nb nn+nb svc lr bag)
 fps=(morg2 morg3 maccs circular rdk rdk_maccs)
@@ -46,6 +48,7 @@ then
         --targets ${targets}\
         --model ${model}\
         --path ${output_dir} \
+        --n_proc ${N_PROC}
         )
     # echo $args
     ulimit -c 0
