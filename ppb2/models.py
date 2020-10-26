@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -62,6 +64,8 @@ def save_model(model, model_filename):
         pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
 
 def load_model(model_filename):
+    assert model_filename.endswith(".pkl")
+    assert os.path.exists(model_filename)
     print ("reading model from", model_filename)
     with open(model_filename, "rb") as f:
         return pkl.load(f)
@@ -70,7 +74,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
     """Stacked PPB2 model"""
 
     def __init__(self, 
-        # fps=["morg2", "rdk", "maccs"], 
         models=["morg2-nn+nb", "morg3-nn+nb"],
         n_splits=5,
         stack_method="predict_proba",
@@ -78,19 +81,17 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         n_proc=8,
         passthrough=False):
 
-        # assert len(fps) == len(models)
-
         self.classifiers = [
-            # ("{}-{}".format(fp, model), 
-            #     PPB2(fp=fp, model_name=model))
-            # for fp, model in zip(fps, models)
             (model, PPB2(model=model, n_proc=n_proc))
                 for model in models
         ]
         assert len(self.classifiers)  == len(models)
 
         print ("building stacked PPB2 classifier",
-            "using the following models:", self.classifiers)
+            "using the following models:", )
+        for model_name, classifier in self.classifiers:
+            print (model_name, classifier)
+        print ()
 
         self.n_splits = n_splits
         assert stack_method in {"predict_proba", "predict"}
@@ -254,25 +255,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "bag", "lr", "svc"}
         self.n_proc = n_proc
         self.k = k
-        
-    def fit(self, X, y):
-        """
-        """
-        assert isinstance(X, pd.Series)
-        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
-
-        assert X.shape[0] == y.shape[0]
-
-        print ("fitting PPB2 model", "({})".format(self.model_name),
-            "to", X.shape[0], "SMILES")
-
-        if  len(y.shape) == 1:
-            print ("fitting in the single-target setting")
-            self.multi_label = False
-        else:
-            print ("fitting in the multi-target setting")
-            print ("number of targets:", y.shape[1])
-            self.multi_label = True
 
         model_name = self.model_name   
         if model_name == "nn":
@@ -283,6 +265,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 n_jobs=self.n_proc)
         elif model_name == "nb":
             self.model = BernoulliNB(alpha=1.)
+        elif model_name == "nn+nb":
+            self.model = None
         elif model_name == "svc":
             self.model = SVC(probability=True)
         elif model_name == "bag":
@@ -291,15 +275,35 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model = LogisticRegressionCV(
                 max_iter=1000,
                 n_jobs=1)
-        if self.multi_label and model_name in {"nb", "svc", "bag", "lr"}:
-            self.model = OneVsRestClassifier(
+        
+    def fit(self, X, y):
+        """
+        """
+        assert isinstance(X, pd.Series)
+        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
+
+        assert X.shape[0] == y.shape[0]
+
+        print ("fitting PPB2 model", 
+            "({}-{})".format(self.fp, self.model_name),
+            "to", X.shape[0], "SMILES")
+
+        if  len(y.shape) == 1:
+            print ("fitting in the single-target setting")
+            self.multi_label = False
+        else:
+            print ("fitting in the multi-target setting")
+            print ("number of targets:", y.shape[1])
+            self.multi_label = True
+
+        if self.multi_label and self.model_name in {"nb", "svc", "bag", "lr"}:
+            self.model = OneVsRestClassifier( # wrap classifier in OneVsRestClassifier for multi-label case
                 self.model,
                 n_jobs=self.n_proc)
 
-        if model_name == "nn+nb": # keep references for local NB fitting
+        if self.model_name == "nn+nb": # keep training data references for local NB fitting
             self.X = X 
             self.y = y
-            self.model = None
 
         # covert X to fingerprint
         X = load_training_fingerprints(X, self.fp,)
@@ -307,8 +311,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
         assert X.shape[0] == y.shape[0]
 
         if self.model is not None:
-            print ("fitting model to", 
-                X.shape[0], "fingerprints", 
+            print ("fitting", self.model_name, "model to", 
+                X.shape[0], self.fp, "fingerprints", 
                 "for", y.shape[1], "targets",
                 "using", self.model.n_jobs, "cores")
             self.model.fit(X, y)
@@ -337,9 +341,9 @@ class PPB2(BaseEstimator, ClassifierMixin):
         print ("determining", self.k, 
             "nearest compounds to each query")
         dists = pairwise_distances(X, training_samples, 
-            metric="jaccard", n_jobs=-1, )
+            metric="jaccard", n_jobs=self.n_proc, )
         idx = dists.argsort(axis=-1)[:,:self.k]
-        print ("neighbours determined")
+        print ("closest", self.k, "neighbours determined")
 
         assert idx.shape[0] == X.shape[0]
         assert idx.shape[1] == self.k
@@ -365,13 +369,11 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 n_jobs=1)
 
             pred = np.zeros(y.shape[1])
-            # probs = np.zeros(y.shape[1])
             
             ones_idx = y.all(axis=0)
             zeros_idx = (1-y).all(axis=0)
 
             pred[ones_idx] = 1
-            # probs[ones_idx] = 1
 
             # only fit on targets with pos and neg examples
             idx = ~np.logical_or(ones_idx, zeros_idx)
@@ -379,9 +381,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 nb.fit(X, y[:,idx])
                 pred[idx] = (nb.predict(query)[0] if mode=="predict"
                     else nb.predict_proba(query)[0])
-                # pred[idx] = nb.predict(query)[0]
-                # probs[idx] = nb.predict_proba(query)[0]
-            # return pred, probs
             return pred
 
         else:
@@ -389,15 +388,14 @@ class PPB2(BaseEstimator, ClassifierMixin):
             nb = BernoulliNB(alpha=1.)
 
             if y.all():
-                return 1, 1
+                return 1
             if (1-y).all():
-                return 0, 0
+                return 0
 
             nb.fit(X, y)
 
             return (nb.predict(query)[0] if mode=="predict"
                 else nb.predict_proba(query)[0])
-            # return (nb.predict(query)[0], nb.predict_proba(query)[0])
 
     def _local_nb_prediction(self, 
         queries, X, y,
@@ -409,25 +407,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
         if self.multi_label:
             assert len(y.shape) == 3
             n_targets = y.shape[-1]
-            # predictions = np.zeros((n_queries, n_targets))
-
-        # else:
-            # predictions = np.zeros((n_queries, ))
-        # probs = np.zeros_like(predictions)
-
-        # for query_idx in range(n_queries):
-
-        #     # predictions[query_idx], probs[query_idx] = self._fit_nb(
-        #     predictions[query_idx] = self._fit_nb(
-        #         queries[query_idx:query_idx+1],
-        #         X[query_idx],
-        #         y[query_idx],
-        #         mode=mode)
-
-        #     if query_idx > 0 and query_idx % 50 == 0:
-        #         print ("completed fitting NB for query",
-        #             query_idx, "/", n_queries,
-        #             "in mode", mode)
         
         with mp.Pool(processes=self.n_proc) as p:
             predictions = p.starmap(
@@ -440,14 +419,15 @@ class PPB2(BaseEstimator, ClassifierMixin):
         if self.multi_label:
             assert predictions.shape[1] == n_targets
 
-        return predictions#, probs
+        return predictions
 
  
     def predict(self, X):
         print ("predicting for", X.shape[0], 
             "query molecules")
         X = compute_fp(X, self.fp, n_proc=self.n_proc)
-        print ("performing prediction")
+        print ("performing prediction",
+            "using", self.model.n_jobs, "processes")
         if self.model_name == "nn+nb":
 
             k_nearest_samples, k_nearest_labels = \
@@ -457,7 +437,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 X,
                 k_nearest_samples,
                 k_nearest_labels,
-                mode="predict")#[0] # return predictions only
+                mode="predict")
         else:
             return self.model.predict(X)
 
@@ -465,6 +445,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
         print ("predicting probabilities for", X.shape[0], 
             "query molecules")
         X = compute_fp(X, self.fp, n_proc=self.n_proc)
+        print ("performing prediction",
+            "using", self.model.n_jobs, "processes")
         if self.model_name == "nn+nb":
 
             k_nearest_samples, k_nearest_labels = \
@@ -474,7 +456,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 X,
                 k_nearest_samples,
                 k_nearest_labels,
-                mode="predict_proba")#[1] # return probs only
+                mode="predict_proba")
 
         if self.model_name == "nn":
             probs = self.model.predict_proba(X)
@@ -489,8 +471,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
         if self.model is None:
             return True
         try:
-             check_is_fitted(self.model)
-             return True
+            check_is_fitted(self.model)
+            return True
         except NotFittedError:
             return False
 

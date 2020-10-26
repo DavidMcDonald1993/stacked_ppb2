@@ -38,6 +38,7 @@ def compute_p_at_k(
     valid_compounds = labels.sum(axis=1) >= k
     n_valid = valid_compounds.sum()
     assert n_valid > 0
+    print ("number of compounds with >=", k, "targets:", n_valid)
     labels = labels[valid_compounds]
     pred = pred[valid_compounds]
     probs = probs[valid_compounds]
@@ -74,6 +75,7 @@ def compute_measures(
 
     assert len(labels.shape) == len(pred.shape) == len(probs.shape) == 2
     n_queries = labels.shape[0]
+    assert pred.shape[0] == probs.shape[0] == n_queries
 
     p_at_k = compute_p_at_k(labels, pred, probs, k=k, n_proc=n_proc)
 
@@ -114,6 +116,53 @@ def compute_measures(
     return (p_at_k.mean(), roc.mean(), ap.mean(), f1.mean(), 
         precision.mean(), recall.mean())
 
+def validate(args, split_name):
+
+    model_filename = os.path.join("models", 
+        split_name,
+        get_model_filename(args))
+    assert os.path.exists(model_filename)
+    model = load_model(model_filename)
+    model.set_n_proc(args.n_proc)
+
+    X_test_filename = os.path.join("splits", 
+        split_name,
+        "test.smi")
+    assert os.path.exists(X_test_filename)
+    X_test = read_smiles(X_test_filename)
+
+    Y_test_filename = os.path.join("splits", 
+        split_name,
+        "test.npz")
+    assert os.path.exists(Y_test_filename)
+    Y_test = load_labels(Y_test_filename).A
+
+    predictions = model.predict(X_test)
+    probs = model.predict_proba(X_test)
+    assert isinstance(probs, np.ndarray)
+    assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+
+    # ensure targets have at least one hit / miss
+    idx = np.logical_and(Y_test.any(axis=0,), (1-Y_test).any(axis=0))
+    Y_test = Y_test[:,idx]
+    predictions = predictions[:,idx]
+    probs = probs[:,idx]
+
+    # ensure compounds hit at least one target
+    idx = np.logical_and(Y_test.any(axis=1,), (1-Y_test).any(axis=1))
+    Y_test = Y_test[idx]
+    predictions = predictions[idx]
+    probs = probs[idx]
+
+    assert Y_test.any(axis=0).all()
+    assert (1-Y_test).any(axis=0).all()
+    assert Y_test.any(axis=1).all()
+    assert (1-Y_test).any(axis=1).all()
+
+    return compute_measures(Y_test, 
+        predictions,
+        probs)
+
 def cross_validation(
     args,
     n_splits=5,
@@ -135,29 +184,31 @@ def cross_validation(
     for split in range(n_splits):
         print ("processing fold", split+1, "/", n_splits)
 
-        model_filename = os.path.join("models", "split_{}".format(split),
-            get_model_filename(args))
-        assert os.path.exists(model_filename)
-        model = load_model(model_filename)
+        # model_filename = os.path.join("models", "split_{}".format(split),
+        #     get_model_filename(args))
+        # assert os.path.exists(model_filename)
+        # model = load_model(model_filename)
+        # model.set_n_proc(n_proc)
 
-        X_test_filename = os.path.join("splits", "split_{}".format(split),
-            "test.smi")
-        assert os.path.exists(X_test_filename)
-        X_test = read_smiles(X_test_filename)
+        # X_test_filename = os.path.join("splits", "split_{}".format(split),
+        #     "test.smi")
+        # assert os.path.exists(X_test_filename)
+        # X_test = read_smiles(X_test_filename)
 
-        Y_test_filename = os.path.join("splits", "split_{}".format(split),
-            "test.npz")
-        assert os.path.exists(Y_test_filename)
-        Y_test = load_labels(Y_test_filename).A
+        # Y_test_filename = os.path.join("splits", "split_{}".format(split),
+        #     "test.npz")
+        # assert os.path.exists(Y_test_filename)
+        # Y_test = load_labels(Y_test_filename).A
 
-        predictions = model.predict(X_test)
-        probs = model.predict_proba(X_test)
-        assert isinstance(probs, np.ndarray)
-        assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
-        assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
+        # predictions = model.predict(X_test)
+        # probs = model.predict_proba(X_test)
+        # assert isinstance(probs, np.ndarray)
+        # assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+        # assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
 
         print ("computing results for split", split+1)
-        results[split] = compute_measures(Y_test, predictions, probs, n_proc=n_proc)
+        # results[split] = compute_measures(Y_test, predictions, probs, n_proc=n_proc)
+        results[split] = validate(args, "split_{}".format(split))
         print ("completed fold", split+1)
         print ("#########################")
         print ()
@@ -166,53 +217,54 @@ def cross_validation(
         columns=pd.Series(metric_names, name="metric"))
 
     print ("computing mean over all folds")
+    print ()
   
     # mean over all folds
     results = results.mean(0)
 
-    print ("beginning evaluation on test data")
+    print ("evaluating on test data")
 
-    # compute test metrics
-    model_filename = os.path.join("models", "complete",
-        get_model_filename(args))
-    assert os.path.exists(model_filename)
-    model = load_model(model_filename)
+    # # compute test metrics
+    # model_filename = os.path.join("models", "complete",
+    #     get_model_filename(args))
+    # assert os.path.exists(model_filename)
+    # model = load_model(model_filename)
 
-    X_test_filename = os.path.join("splits", "complete",
-        "test.smi")
-    assert os.path.exists(X_test_filename)
-    X_test = read_smiles(X_test_filename)
+    # X_test_filename = os.path.join("splits", "complete",
+    #     "test.smi")
+    # assert os.path.exists(X_test_filename)
+    # X_test = read_smiles(X_test_filename)
 
-    Y_test_filename = os.path.join("splits", "complete",
-        "test.npz")
-    assert os.path.exists(Y_test_filename)
-    Y_test = load_labels(Y_test_filename).A
+    # Y_test_filename = os.path.join("splits", "complete",
+    #     "test.npz")
+    # assert os.path.exists(Y_test_filename)
+    # Y_test = load_labels(Y_test_filename).A
 
-    predictions = model.predict(X_test)
-    probs = model.predict_proba(X_test)
-    assert isinstance(probs, np.ndarray)
-    assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
-    # assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
+    # predictions = model.predict(X_test)
+    # probs = model.predict_proba(X_test)
+    # assert isinstance(probs, np.ndarray)
+    # assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+    # # assert Y_test.shape[1] == predictions.shape[1] == probs.shape[1]
 
+    # idx = np.logical_and(Y_test.any(axis=0,), (1-Y_test).any(axis=0))
+    # Y_test = Y_test[:,idx]
+    # predictions = predictions[:,idx]
+    # probs = probs[:,idx]
 
-    idx = np.logical_and(Y_test.any(axis=0,), (1-Y_test).any(axis=0))
-    Y_test = Y_test[:,idx]
-    predictions = predictions[:,idx]
-    probs = probs[:,idx]
+    # idx = np.logical_and(Y_test.any(axis=1,), (1-Y_test).any(axis=1))
+    # Y_test = Y_test[idx]
+    # predictions = predictions[idx]
+    # probs = probs[idx]
 
-    idx = np.logical_and(Y_test.any(axis=1,), (1-Y_test).any(axis=1))
-    Y_test = Y_test[idx]
-    predictions = predictions[idx]
-    probs = probs[idx]
+    # assert Y_test.any(axis=0).all()
+    # assert (1-Y_test).any(axis=0).all()
+    # assert Y_test.any(axis=1).all()
+    # assert (1-Y_test).any(axis=1).all()
 
-    assert Y_test.any(axis=0).all()
-    assert (1-Y_test).any(axis=0).all()
-    assert Y_test.any(axis=1).all()
-    assert (1-Y_test).any(axis=1).all()
-
-    test_results = compute_measures(Y_test, 
-        predictions,
-        probs)
+    # test_results = compute_measures(Y_test, 
+    #     predictions,
+    #     probs)
+    test_results = validate(args, "complete")
     test_results = pd.Series(test_results, 
         index=pd.Series(["test-{}".format(metric) for metric in metric_names],
             name="metric"))

@@ -10,12 +10,16 @@ from get_fingerprints import read_smiles
 
 from pathlib import Path
 
+from models import load_model
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--query",)
     parser.add_argument("--model",)
     parser.add_argument("--output")
+
+    parser.add_argument("--n_proc", default=8, type=int)
 
     parser.add_argument("-k", 
         default=200, 
@@ -41,11 +45,8 @@ def main():
 
 
     model_filename = args.model 
-    assert model_filename.endswith(".pkl")
-    assert os.path.exists(model_filename)
-    print ("reading model from", model_filename)
-    with open(model_filename, "rb") as f:
-        model = pkl.load(f)
+    model = load_model(model_filename)
+    model.set_n_proc(args.n_proc)
 
     # load queries (SMILES format)
     query_filename = args.query 
