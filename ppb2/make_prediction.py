@@ -6,18 +6,18 @@ import pandas as pd
 
 import pickle as pkl 
 
-from get_fingerprints import read_smiles
-
 from pathlib import Path
 
 from models import load_model
+from data_utils import read_smiles
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--query",)
     parser.add_argument("--model",)
-    parser.add_argument("--output")
+    parser.add_argument("--output", default="predictions")
 
     parser.add_argument("--n_proc", default=8, type=int)
 
@@ -43,9 +43,9 @@ def main():
     with open(target_mapping_filename, "rb") as f:
         target_mapping = pkl.load(f)
 
-
     model_filename = args.model 
     model = load_model(model_filename)
+    model.set_k(args.k)
     model.set_n_proc(args.n_proc)
 
     # load queries (SMILES format)
@@ -58,10 +58,12 @@ def main():
     print ("number of queries:", n_queries)
 
     prediction = model.predict(queries)
+    prediction = prediction.astype(bool)
+
     prediction_probs = model.predict_proba(queries)
     n_targets = prediction.shape[1]
-    targets = [target_mapping[t] 
-            for t in range(n_targets)]
+    targets = np.array([target_mapping[t] 
+            for t in range(n_targets)])
 
     if not isinstance(prediction, np.ndarray):
         prediction = prediction.A
@@ -73,7 +75,7 @@ def main():
         index=query_index,
         columns=targets)
 
-    output_dir = os.path.join(
+    output_dir = os.path.join( # add model name to output dir
         args.output, 
         "{}-{}".format(Path(model_filename).stem, Path(query_filename).stem)
         )
@@ -83,17 +85,30 @@ def main():
         "predictions.csv")
     print ("writing predictions to", prediction_filename)
     prediction.to_csv(prediction_filename)
+
+    # write target predictions to file
+    prediction = prediction.values
+    for i, row in enumerate(prediction):
+        query = query_index[i]
+        hits = targets[row]
+        query_hit_filename = os.path.join(
+            output_dir, "{}_hits.txt".format(query))
+        print ("writing hits for query", query,
+            "to", query_hit_filename)
+        with open(query_hit_filename, "w") as f:
+            f.write("\n".join(hits))
     
     probs_filename = os.path.join(output_dir,
         "probs.csv")
     print ("writing probs to", probs_filename)
     prediction_probs.to_csv(probs_filename)
 
-    # rank top n targets for each query
+    # rank top n hits for each query
     n = 100
 
     prediction_probs = prediction_probs.values
     idx = prediction_probs.argsort(axis=-1,)[:, ::-1][:,:n]
+
     predictions_ranked_filename = os.path.join(output_dir,
         "top_{}_targets.tsv".format(n))
     print ("writing top", n, "targets for each query to",

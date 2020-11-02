@@ -35,8 +35,8 @@ def get_rdk_mol(smi, perform_standardisation=True):
 def rdk_maccs_wrapper(smi, ):
     mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
-    return [bool(bit) 
-        for bit in MACCSkeys.GenMACCSKeys(mol)]
+    return sp.csr_matrix([bool(bit) 
+        for bit in MACCSkeys.GenMACCSKeys(mol)])
     
 def get_rdk_maccs(smiles, n_proc=8):
     '''input is a vector of SMILES'''
@@ -55,14 +55,14 @@ def get_rdk_maccs(smiles, n_proc=8):
             rdk_maccs_wrapper)
         rdk_maccs_fingerprints = list(rdk_maccs_fingerprints.loc[smiles.index])
 
-    return np.array(rdk_maccs_fingerprints)
+    return sp.vstack(rdk_maccs_fingerprints)
 
 
 def rdk_wrapper(smi, n_bits=1024):
     mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
-    return [bool(bit) 
-        for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )]
+    return sp.csr_matrix([bool(bit) 
+        for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )])
 
 def get_rdk(smiles, n_bits=1024, n_proc=8):
     '''input is a vector of SMILES'''
@@ -83,18 +83,18 @@ def get_rdk(smiles, n_bits=1024, n_proc=8):
                 )
         rdk_fingerprints = list(rdk_fingerprints.loc[smiles.index])
 
-    return np.array(rdk_fingerprints)
+    return sp.vstack(rdk_fingerprints)
 
 def morg_wrapper(smi, 
     radius, 
     n_bits):
     mol = get_rdk_mol(smi)
     assert mol.GetNumAtoms() > 0
-    return [bool(bit) 
+    return sp.csr_matrix([bool(bit) 
         for bit in AllChem.GetMorganFingerprintAsBitVect(mol, 
             radius=radius, 
             nBits=n_bits,
-            useFeatures=True , )]
+            useFeatures=True , )])
 
 def get_morg(smiles, radius=2, n_bits=1024, n_proc=8):
     '''input is a vector of SMILES'''
@@ -121,7 +121,7 @@ def get_morg(smiles, radius=2, n_bits=1024, n_proc=8):
             )
         morgan_fingerprints = list(morgan_fingerprints.loc[smiles.index])
 
-    return np.array(morgan_fingerprints)
+    return sp.vstack(morgan_fingerprints)
 
 #######################
 
@@ -130,14 +130,14 @@ def get_morg(smiles, radius=2, n_bits=1024, n_proc=8):
 def get_bit_string(fp):
     s = [fp.IsBitOn(b) for b in range(fp.GetSize())]
     assert any(s)
-    return s
+    return sp.csr_matrix(s)
 
 
 def circular_wrapper(smi, 
     num_bits = 1024,
     min_radius = 2,
     max_radius = 2):
-    # from openeye import oegraphsim
+
     mol = oechem.OEGraphMol()
     oechem.OESmilesToMol(mol, smi)
     fp = oegraphsim.OEFingerPrint()
@@ -157,8 +157,6 @@ def get_circular(smiles,
     input is smiles
     '''
    
-    # mols = get_mols(X, parallel=parallel)
-
     print ("computing circular fingerprint")
 
     if n_proc>1:
@@ -177,10 +175,10 @@ def get_circular(smiles,
                 max_radius=max_radius)
             for smi in smiles]
 
-    return np.array(fps)
+    return sp.vstack(fps)
 
 def maccs_wrapper(smi, ):
-    # from openeye import oegraphsim
+
     mol = oechem.OEGraphMol()
     oechem.OESmilesToMol(mol, smi)
     fp = oegraphsim.OEFingerPrint()
@@ -191,10 +189,6 @@ def get_MACCs(smiles, n_proc=8):
 
     print ("computing maccs fingerprint")
 
-    # from openeye import oegraphsim
-
-    # mols = get_mols(X, parallel=parallel)
-
     if n_proc>1:
         with mp.Pool(processes=n_proc) as p:
             fps = p.map(maccs_wrapper, smiles)
@@ -202,7 +196,7 @@ def get_MACCs(smiles, n_proc=8):
     else:
         fps = [maccs_wrapper(smi) for smi in smiles]
 
-    return np.array(fps)
+    return sp.vstack(fps)
 
 def compute_fp(smiles, fp, n_bits=1024, n_proc=8):
     print ("computing", fp, "fingerpints for", 
@@ -233,10 +227,9 @@ def load_training_fingerprints(smiles, fp):
         "fingerprints", "{}.pkl".format(fp))
     print ("loading fingerprints from", 
         fp_filename)
-    # return np.load(fp_filename)
     with open(fp_filename, "rb") as f:
         fingerprints = pkl.load(f)
-    return np.array([fingerprints[smi] 
+    return sp.vstack([fingerprints[smi] 
         for smi in smiles])
 
 
@@ -247,7 +240,7 @@ def main():
         "maccs", "circular", )
 
     training_smiles_filename = os.path.join("data", 
-        "compounds.smi")
+        "compounds.smi.gz")
     print ("reading training smiles from", 
         training_smiles_filename)
     smiles = pd.read_csv(training_smiles_filename,header=None, 
@@ -278,7 +271,6 @@ def main():
         }
 
         print ("writing to", fingerprints_filename)
-        # np.save(fingerprints_filename, fingerprints)
         with open(fingerprints_filename, "wb") as f:
             pkl.dump(fingerprints_dict, f, pkl.HIGHEST_PROTOCOL)
 

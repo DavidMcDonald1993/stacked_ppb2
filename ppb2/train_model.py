@@ -6,7 +6,7 @@ import pandas as pd
 
 import pickle as pkl 
 
-from split_data import read_smiles, load_labels
+from data_utils import read_smiles, load_labels
 from models import build_model, save_model
 
 def parse_args():

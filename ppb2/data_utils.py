@@ -1,6 +1,7 @@
 
 import os 
 
+import numpy as np
 import pandas as pd
 import scipy.sparse as sp 
 
@@ -61,39 +62,45 @@ def split_data(X, Y, n_splits=5, output_dir="splits"):
             sp.csr_matrix(Y_test))
 
 
-def filter_training_data(X, Y, 
-    min_compounds=10, 
-    min_target_hits=10):
-    print ("filtering training data to ensure",
-        "at least", min_compounds, "compounds hit each target and",
-        "each compound hits", min_target_hits, "targets")
+def filter_data(X, Y, 
+    min_actives=10, 
+    min_hits=10):
+    print ("filtering data to ensure",
+        "at least", min_actives, "compounds hit each target and",
+        "each compound hits", min_hits, "targets")
 
-    while (Y.sum(axis=0) < min_compounds).any() or\
-        (Y.sum(axis=1) < min_target_hits).any():
+    print ("num compounds before filtering:", X.shape[0])
+    print ("num targets before filtering:", Y.shape[1])
+    print ("number of relationships: before filtering", Y.sum())
+
+    while (Y.sum(axis=0) < min_actives).any() or\
+        (Y.sum(axis=1) < min_hits).any():
 
         # filter targets
         idx = np.logical_and(
-            Y.sum(axis=0) >= min_compounds, 
-            (1-Y).sum(axis=0) >= min_compounds)
+            Y.sum(axis=0) >= min_actives, 
+            (1-Y).sum(axis=0) >= min_actives)
         Y = Y[:,idx]
 
         # filter compounds
-        idx = Y.sum(axis=1) >= min_target_hits
+        idx = Y.sum(axis=1) >= min_hits
         X = X[idx]
-        Y = y[idx, ]
+        Y = Y[idx, ]
 
-    assert (Y.sum(axis=0) >= min_compounds).all()
-    assert ((1-Y).sum(axis=0) >= min_compounds).all()
-    assert (Y.sum(axis=1) >= min_target_hits).all()
-    assert ((1-Y).sum(axis=1) >= min_target_hits).all()
+    assert (Y.sum(axis=0) >= min_actives).all()
+    assert ((1-Y).sum(axis=0) >= min_actives).all()
+    assert (Y.sum(axis=1) >= min_hits).all()
+    assert ((1-Y).sum(axis=1) >= min_hits).all()
 
     print ("num compounds after filtering:", X.shape[0])
     print ("num targets after filtering:", Y.shape[1])
-    print ("number of relationships:", Y.sum())
+    print ("number of relationships after filtering:", Y.sum())
 
     return X, Y
 
-def main():
+def main(): # run this to generate training splits
+
+    n_splits = 5
 
     training_smiles_filename = os.path.join("data", 
         "compounds.smi")
@@ -107,12 +114,12 @@ def main():
     # filter out compounds that hit at less than min_hits targets
     min_hits = 1
 
-    # remove any targets that are hit/not hit by less than min_compounds compounds
-    min_compounds = 5
+    # remove any targets that are hit/not hit by less than min_actives compounds
+    min_actives = n_splits # at least one positive example of the class in each split
 
-    X, Y = filter_training_data(X, Y, 
-        min_compounds=min_compounds, 
-        min_target_hits=min_hits)
+    X, Y = filter_data(X, Y, 
+        min_actives=min_actives, 
+        min_hits=min_hits)
 
     assert X.shape[0] == Y.shape[0]
     assert Y.any(axis=1).all()
@@ -123,7 +130,7 @@ def main():
     assert (Y.sum(axis=1) >= min_hits).all()
 
     output_dir = os.path.join("splits")
-    split_data(X, Y, n_splits=5, 
+    split_data(X, Y, n_splits=n_splits, 
         output_dir=output_dir)
 
 if __name__ == "__main__":

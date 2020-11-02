@@ -26,7 +26,15 @@ compounds=splits/${split}/train.smi
 targets=splits/${split}/train.npz 
 
 output_dir=models/${split}
-output_file="${output_dir}/stack-(morg3-lr&morg2-svc&morg3-svc&circular-svc&rdk-svc).pkl"
+
+# determine output file
+model_arr=(${model})
+output_file="${output_dir}/${model_arr[0]}-(${model_arr[1]}"
+for model_name in ${model_arr[@]:2};
+do 
+    output_file=${output_file}"&"${model_name}
+done
+output_file=${output_file}").pkl"
 
 if [ ! -f ${output_file} ]
 then

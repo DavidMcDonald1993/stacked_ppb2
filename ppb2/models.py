@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 import pandas as pd
+from scipy import sparse as sp
 
-import itertools
 import functools
 
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -13,9 +13,9 @@ from sklearn.naive_bayes import BernoulliNB
 from sklearn.multiclass import OneVsRestClassifier
 
 from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegressionCV
+from sklearn.linear_model import LogisticRegressionCV, RidgeClassifierCV
 
-from sklearn.ensemble import BaggingClassifier#, StackingClassifier
+from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier
 
 from sklearn.base import clone
 
@@ -23,17 +23,19 @@ from sklearn.utils.validation import check_is_fitted
 
 from sklearn.metrics import pairwise_distances
 
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 from skmultilearn.model_selection import IterativeStratification
 
 from sklearn.exceptions import NotFittedError
 
 from get_fingerprints import compute_fp, load_training_fingerprints
 
-# from multi_label_stack import StackingClassifier
 import multiprocessing as mp
 
 import pickle as pkl
+
+dense_input = {"nn", }
+support_multi_label = {"nn", "ext", "ridge"}
 
 def build_model(args):
     model = args.model
@@ -101,12 +103,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         self.passthrough = passthrough
         if passthrough:
             raise NotImplementedError
-
-        # self.model = StackingClassifier(classifiers,
-        #     n_jobs=1,
-        #     passthrough=True,
-        #     verbose=True,
-        # )
 
     def fit(self, X, y):
         """
@@ -199,8 +195,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             check_is_fitted(self.final_estimator)
             return self.final_estimator.predict(meta_preds)
 
-        # return self.model.predict(X)
-
     def predict_proba(self, X):
         assert isinstance(X, pd.Series)
         assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
@@ -231,8 +225,6 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             assert self.final_estimator.classes_[1]
             return self.final_estimator.predict_proba(meta_preds)[:, 1]
 
-        # return self.model.predict_proba(X)
-
     def set_n_proc(self, n_proc):
         self.n_proc = n_proc
         for _, classifier in self.classifiers:
@@ -252,7 +244,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "circular", "maccs"}
         self.model_name = model[1]
         assert self.model_name in {"nn", "nb", "nn+nb",
-            "bag", "lr", "svc"}
+            "bag", "lr", "svc", "ext", "ridge"}
         self.n_proc = n_proc
         self.k = k
 
@@ -270,11 +262,17 @@ class PPB2(BaseEstimator, ClassifierMixin):
         elif model_name == "svc":
             self.model = SVC(probability=True)
         elif model_name == "bag":
-            self.model = BaggingClassifier(n_jobs=1)
+            self.model = BaggingClassifier(n_jobs=-1)
         elif model_name == "lr":
             self.model = LogisticRegressionCV(
                 max_iter=1000,
-                n_jobs=1)
+                n_jobs=-1)
+        elif model_name == "ext":
+            self.model = ExtraTreesClassifier(
+                bootstrap=True, 
+                n_jobs=n_proc) # capable of multilabel classification out of the box
+        elif model_name == "ridge":
+            self.model = RidgeClassifierCV()
         
     def fit(self, X, y):
         """
@@ -296,17 +294,20 @@ class PPB2(BaseEstimator, ClassifierMixin):
             print ("number of targets:", y.shape[1])
             self.multi_label = True
 
-        if self.multi_label and self.model_name in {"nb", "svc", "bag", "lr"}:
+        if self.multi_label and self.model_name not in support_multi_label.union({"nn+nb"}):
             self.model = OneVsRestClassifier( # wrap classifier in OneVsRestClassifier for multi-label case
                 self.model,
                 n_jobs=self.n_proc)
 
-        if self.model_name == "nn+nb": # keep training data references for local NB fitting
-            self.X = X 
-            self.y = y
-
         # covert X to fingerprint
         X = load_training_fingerprints(X, self.fp,)
+
+        if self.model_name in dense_input: # cannot handle sparse input
+            X = X.A
+
+        if self.model_name == "nn+nb": # keep training data references for local NB fitting
+            self.X = X#.astype(int) 
+            self.y = y
 
         assert X.shape[0] == y.shape[0]
 
@@ -314,131 +315,211 @@ class PPB2(BaseEstimator, ClassifierMixin):
             print ("fitting", self.model_name, "model to", 
                 X.shape[0], self.fp, "fingerprints", 
                 "for", y.shape[1], "targets",
-                "using", self.model.n_jobs, "cores")
+                "using", self.n_proc, "cores")
+
             self.model.fit(X, y)
 
         return self
 
-    def set_k(self, k):
-        self.k = k 
-        if isinstance(self.model, KNeighborsClassifier):
-            self.model.n_neighbors = k
+    # def _determine_k_closest_samples(self, X, chunksize=1000):
+    #     if not isinstance(X, np.ndarray): # dense needed for jaccard distance
+    #         X = X.A
 
-    def _determine_k_closest_samples(self, X):
-        # assert isinstance(self.model, KNeighborsClassifier)
-        # assert self.k == self.model.n_neighbors
-        # print ("determining", self.k, 
-        #     "nearest compounds to each query")
-        # idx = self.model.kneighbors(X,
-        #     return_distance=False)
-        # print ("neighbours determined")
+    #     # training_samples = load_training_fingerprints(self.X, self.fp)
+    #     training_samples = self.X
+    #     if not isinstance(training_samples, np.ndarray):
+    #         training_samples = training_samples.A
+    #     training_labels = self.y
+    #     if not isinstance(training_labels, np.ndarray):
+    #         training_labels = training_labels.A
 
-        training_samples = load_training_fingerprints(self.X, self.fp)
-        training_labels = self.y
-        if not isinstance(training_labels, np.ndarray):
-            training_labels = training_labels.A
+    #     print ("determining", self.k, 
+    #         "nearest compounds to each query")
+    #     n_queries = X.shape[0]
+    #     n_chunks = n_queries // chunksize + 1
+    #     print ("chunking queries with chunksize", chunksize,)
+    #     print ("number of chunks:", n_chunks)
+    #     # idx = np.empty((n_queries, self.k))
 
-        print ("determining", self.k, 
-            "nearest compounds to each query")
-        dists = pairwise_distances(X, training_samples, 
-            metric="jaccard", n_jobs=self.n_proc, )
-        idx = dists.argsort(axis=-1)[:,:self.k]
-        print ("closest", self.k, "neighbours determined")
+    #     for chunk in range(n_chunks):
 
-        assert idx.shape[0] == X.shape[0]
-        assert idx.shape[1] == self.k
+    #         chunk_queries = X[chunk*chunksize:(chunk+1)*chunksize]
+        
+    #         dists = pairwise_distances(
+    #                 chunk_queries,
+    #                 training_samples, 
+    #             metric="jaccard", n_jobs=self.n_proc, )
+    #         # idx[chunk*chunksize:(chunk+1)*chunksize] = \
+    #         idx =  dists.argsort(axis=-1)[:,:self.k] # smallest k distances
+        
+    #         k_nearest_samples = training_samples[idx] # return dense
+    #         k_nearest_labels = training_labels[idx]
 
-        k_nearest_samples = training_samples[idx]
-        k_nearest_labels = training_labels[idx]
+    #         yield (chunk_queries, 
+    #             k_nearest_samples, k_nearest_labels)
 
-        return k_nearest_samples, k_nearest_labels
+    #         print ("completed chunk", chunk+1)
 
-    def _fit_nb(self,
-        query, X, y, 
+        # print ("closest", self.k, "neighbours determined")
+
+        # assert idx.shape[0] == X.shape[0]
+        # assert idx.shape[1] == self.k
+
+        # k_nearest_samples = training_samples[idx] # return dense
+        # k_nearest_labels = training_labels[idx]
+
+        # return k_nearest_samples, k_nearest_labels
+
+    def _fit_local_nb(self,
+        query, #X, y, 
         mode="predict"):
 
         if len(query.shape) == 1:
             query = query[None, :]
-        
+
+        X = self.X 
+        y = self.y 
+
+        assert isinstance (query, sp.csr_matrix)
+        assert query.dtype == bool
+        assert isinstance (X, sp.csr_matrix)
+        assert X.dtype == bool
+
+        # sparse jaccard distance
+        assert query.shape[1] == X.shape[1]
+
+        # intersect = query.dot(X.T)
+
+        # query_sum = query.sum(axis=1).A1
+        # x_sum = X.sum(axis=1).A1
+        # xx, yy = np.meshgrid(query_sum, x_sum)
+        # union = ((xx + yy).T - intersect)
+
+        # dists = (1 - intersect / union).A1
+        dists = pairwise_distances(query.A, X.A, 
+            metric="jaccard", n_jobs=1)
+        idx = dists.argsort()[0, :self.k]
+
         assert query.shape[0] == 1
 
-        if self.multi_label:
-            assert len(y.shape) == 2
+        X = X[idx]
+        y = y[idx]
+
+        n_targets = y.shape[-1]
+
+        pred = np.zeros(n_targets)
+        ones_idx = y.all(axis=0)
+        zeros_idx = (1-y).all(axis=0)
+
+        pred[ones_idx] = 1
+
+        # only fit on targets with pos and neg examples
+        idx = ~np.logical_or(ones_idx, zeros_idx)
+        if idx.any():
             nb = OneVsRestClassifier(
                 BernoulliNB(alpha=1.),
                 n_jobs=1)
-
-            pred = np.zeros(y.shape[1])
-            
-            ones_idx = y.all(axis=0)
-            zeros_idx = (1-y).all(axis=0)
-
-            pred[ones_idx] = 1
-
-            # only fit on targets with pos and neg examples
-            idx = ~np.logical_or(ones_idx, zeros_idx)
-            if idx.any():
-                nb.fit(X, y[:,idx])
-                pred[idx] = (nb.predict(query)[0] if mode=="predict"
-                    else nb.predict_proba(query)[0])
-            return pred
-
-        else:
-            assert len(y.shape) == 1
-            nb = BernoulliNB(alpha=1.)
-
-            if y.all():
-                return 1
-            if (1-y).all():
-                return 0
-
-            nb.fit(X, y)
-
-            return (nb.predict(query)[0] if mode=="predict"
+            nb.fit(X, y[:,idx])
+            pred[idx] = (nb.predict(query)[0] if mode=="predict"
                 else nb.predict_proba(query)[0])
+        return pred
+
+        # if self.multi_label:
+        #     assert len(y.shape) == 2
+        #     nb = OneVsRestClassifier(
+        #         BernoulliNB(alpha=1.),
+        #         n_jobs=1)
+
+        #     pred = np.zeros(y.shape[1])
+            
+        #     ones_idx = y.all(axis=0)
+        #     zeros_idx = (1-y).all(axis=0)
+
+        #     pred[ones_idx] = 1
+
+        #     # only fit on targets with pos and neg examples
+        #     idx = ~np.logical_or(ones_idx, zeros_idx)
+        #     if idx.any():
+        #         nb.fit(X, y[:,idx])
+        #         pred[idx] = (nb.predict(query)[0] if mode=="predict"
+        #             else nb.predict_proba(query)[0])
+        #     return pred
+
+        # else:
+        #     assert len(y.shape) == 1
+        #     nb = BernoulliNB(alpha=1.)
+
+        #     if y.all():
+        #         return 1
+        #     if (1-y).all():
+        #         return 0
+
+        #     nb.fit(X, y)
+
+        #     return (nb.predict(query)[0] if mode=="predict"
+        #         else nb.predict_proba(query)[0])
 
     def _local_nb_prediction(self, 
-        queries, X, y,
+        queries, 
+        # X, y,
         mode="predict"):
         print ("fitting unique NB models for each query",
             "in mode", mode)
 
         n_queries = queries.shape[0]
-        if self.multi_label:
-            assert len(y.shape) == 3
-            n_targets = y.shape[-1]
+        # if self.multi_label:
+            # assert len(y.shape) == 3
+            # n_targets = y.shape[-1]
         
         with mp.Pool(processes=self.n_proc) as p:
-            predictions = p.starmap(
-                functools.partial(self._fit_nb, mode=mode),
-                zip(queries, X, y))
+            predictions = p.map(
+                functools.partial(self._fit_local_nb, mode=mode),
+                (query for query in queries))
 
         predictions = np.array(predictions)
         assert predictions.shape[0] == n_queries
 
         if self.multi_label:
-            assert predictions.shape[1] == n_targets
+            assert predictions.shape[1] == self.y.shape[-1]
 
         return predictions
 
- 
     def predict(self, X):
         print ("predicting for", X.shape[0], 
             "query molecules")
         X = compute_fp(X, self.fp, n_proc=self.n_proc)
         print ("performing prediction",
-            "using", self.model.n_jobs, "processes")
+            "using", self.n_proc, "processes")
+
         if self.model_name == "nn+nb":
 
-            k_nearest_samples, k_nearest_labels = \
-                self._determine_k_closest_samples(X)
-           
+            # X = X.astype(int)
+            
+            # with mp.Pool(processes=).
+
+            # self._fit_local_nb(X[0])
+
+            # return np.vstack([
+            #     self._local_nb_prediction(
+            #         X_,
+            #         k_nearest_samples,
+            #         k_nearest_labels,
+            #         mode="predict")
+            #         for X_, k_nearest_samples, k_nearest_labels
+            #             in self._determine_k_closest_samples(X)
+            # ])
+
+            # k_nearest_samples, k_nearest_labels = \
+            #     self._determine_k_closest_samples(X)
+
             return self._local_nb_prediction(
                 X,
-                k_nearest_samples,
-                k_nearest_labels,
+            #     k_nearest_samples,
+            #     k_nearest_labels,
                 mode="predict")
         else:
+            if self.model_name in dense_input and not isinstance(X, np.ndarray):
+                X = X.A
             return self.model.predict(X)
 
     def predict_proba(self, X):
@@ -446,23 +527,28 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "query molecules")
         X = compute_fp(X, self.fp, n_proc=self.n_proc)
         print ("performing prediction",
-            "using", self.model.n_jobs, "processes")
+            "using", self.n_proc, "processes")
         if self.model_name == "nn+nb":
-
-            k_nearest_samples, k_nearest_labels = \
-                self._determine_k_closest_samples(X)
+            
+            # X = X.astype(int)
+            # k_nearest_samples, k_nearest_labels = \
+                # self._determine_k_closest_samples(X)
            
             return self._local_nb_prediction(
                 X,
-                k_nearest_samples,
-                k_nearest_labels,
+                # k_nearest_samples,
+                # k_nearest_labels,
                 mode="predict_proba")
 
-        if self.model_name == "nn":
-            probs = self.model.predict_proba(X)
+        if self.model_name in dense_input \
+            and not isinstance(X, np.ndarray):
+            X = X.A
+
+        if self.model_name in support_multi_label:
+            probs = self.model.predict_proba(X) # hangle missing classes correctly
             classes = self.model.classes_
             return np.hstack([probs[:,idx] if idx.any() else 1-probs
-                for probs, idx in zip(probs, classes)])
+                for probs, idx in zip(probs, classes)]) # check for existence of positive class
 
         else:
             return self.model.predict_proba(X)
@@ -481,4 +567,10 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
     def set_n_proc(self, n_proc):
         self.n_proc = n_proc
-        self.model.n_jobs = n_proc
+        if self.model is not None:
+            self.model.n_jobs = n_proc
+
+    def set_k(self, k):
+        self.k = k 
+        if isinstance(self.model, KNeighborsClassifier):
+            self.model.n_neighbors = k
