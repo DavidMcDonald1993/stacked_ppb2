@@ -67,7 +67,7 @@ def save_model(model, model_filename):
 
 def load_model(model_filename):
     assert model_filename.endswith(".pkl")
-    assert os.path.exists(model_filename)
+    assert os.path.exists(model_filename), model_filename
     print ("reading model from", model_filename)
     with open(model_filename, "rb") as f:
         return pkl.load(f)
@@ -518,7 +518,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
             #     k_nearest_labels,
                 mode="predict")
         else:
-            if self.model_name in dense_input and not isinstance(X, np.ndarray):
+            if self.model_name in dense_input \
+                and not isinstance(X, np.ndarray):
                 X = X.A
             return self.model.predict(X)
 
@@ -526,7 +527,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
         print ("predicting probabilities for", X.shape[0], 
             "query molecules")
         X = compute_fp(X, self.fp, n_proc=self.n_proc)
-        print ("performing prediction",
+        print ("performing probability prediction",
             "using", self.n_proc, "processes")
         if self.model_name == "nn+nb":
             
@@ -551,6 +552,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 for probs, idx in zip(probs, classes)]) # check for existence of positive class
 
         else:
+            assert isinstance(self.model, OneVsRestClassifier)
             return self.model.predict_proba(X)
 
     def check_is_fitted(self):

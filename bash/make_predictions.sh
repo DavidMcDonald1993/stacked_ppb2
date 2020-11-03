@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#SBATCH --job-name=TRAINMODELS
-#SBATCH --output=TRAINMODELS_%A_%a.out
-#SBATCH --error=TRAINMODELS_%A_%a.err
+#SBATCH --job-name=PREDMODELS
+#SBATCH --output=PREDMODELS_%A_%a.out
+#SBATCH --error=PREDMODELS_%A_%a.err
 #SBATCH --array=0-215
 #SBATCH --time=10-00:00:00
-#SBATCH -c 10
+#SBATCH -c 21
 #SBATCH --mem=20G
 
-N_PROC=10
+N_PROC=8
 
 splits=(split_0 split_1 split_2 split_3 split_4 complete)
 models=(nn nb nn+nb svc lr bag)
@@ -26,13 +26,18 @@ split=${splits[${split_id}]}
 model=${models[${model_id}]}
 fp=${fps[${fps_id}]}
 
-compounds=splits/${split}/train.smi 
-targets=splits/${split}/train.npz 
+model=nn+nb 
+fp=rdk_maccs
+
+query=splits/${split}/test.smi 
 
 model=${fp}-${model}
 
-output_dir=models/${split}
-output_file=${output_dir}/${model}.pkl
+model_dir=models/${split}
+model_file=${model_dir}/${model}.pkl
+
+output_dir=predictions/${split}
+output_file=${output_dir}/${model}-test/probs.csv
 
 if [ ! -f ${output_file} ]
 then
@@ -44,14 +49,13 @@ then
 
     source activate ppb2_env
 
-    args=$(echo --compounds ${compounds}\
-        --targets ${targets}\
-        --model ${model}\
-        --path ${output_dir} \
+    args=$(echo --query ${query}\
+        --model ${model_file}\
+        --output ${output_dir} \
         --n_proc ${N_PROC}\
         )
     # echo $args
     ulimit -c 0
 
-    python ppb2/train_model.py ${args}
+    python ppb2/make_prediction.py ${args}
 fi

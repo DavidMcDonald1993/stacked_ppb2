@@ -11,6 +11,49 @@ from pathlib import Path
 from models import load_model
 from data_utils import read_smiles
 
+def write_hits(predictions, output_dir):
+    # write target predictions to file
+    assert isinstance(predictions, pd.DataFrame)
+    if isinstance(predictions, pd.DataFrame):
+        query_index = prediction.index
+        targets = prediction.columns
+        prediction = prediction.values
+    hit_dir = os.path.join(output_dir,
+        "hits")
+    for i, row in enumerate(prediction):
+        query = query_index[i]
+        hits = targets[row]
+        query_hit_filename = os.path.join(
+            hit_dir, "{}_hits.txt".format(query))
+        print ("writing hits for query", query,
+            "to", query_hit_filename)
+        with open(query_hit_filename, "w") as f:
+            f.write("\n".join(hits))
+
+def write_top_k_hits(probs, output_dir, k=100):
+    # rank top k hits for each query
+    assert isinstance(probs, pd.DataFrame)
+    if isinstance(probs, pd.DataFrame):
+        query_index = probs.index
+        targets = probs.columns
+        probs = probs.values
+    idx = probs.argsort(axis=-1,)[:, ::-1][:,:k]
+
+    predictions_ranked_filename = os.path.join(output_dir,
+        "top_{}_targets.tsv".format(k))
+    print ("writing top", k, "targets for each query to",
+        predictions_ranked_filename)
+    with open(predictions_ranked_filename, "w") as f:
+        f.write("Query Compound\t{}\n".format(
+            "\t".join(("Target {}".format(i+1) 
+                for i in range(n)))))
+        for i, row in enumerate(idx):
+            f.write("{}".format(query_index[i]))
+            for target_id in row:
+                prob = probs[i, target_id]
+                if prob > 0:
+                    f.write("\t{}".format(target_mapping[target_id], ))
+            f.write("\n")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -24,6 +67,8 @@ def parse_args():
     parser.add_argument("-k", 
         default=200, 
         type=int)
+    
+    parser.add_argument("--write-hits", action="store_true")
 
     return parser.parse_args()
 
@@ -33,7 +78,6 @@ def main():
     assert args.query is not None
     assert args.model is not None
     assert args.output is not None
-
 
     # load target name mappings
     target_mapping_filename = os.path.join("data",
@@ -61,6 +105,7 @@ def main():
     prediction = prediction.astype(bool)
 
     prediction_probs = model.predict_proba(queries)
+    
     n_targets = prediction.shape[1]
     targets = np.array([target_mapping[t] 
             for t in range(n_targets)])
@@ -86,44 +131,16 @@ def main():
     print ("writing predictions to", prediction_filename)
     prediction.to_csv(prediction_filename)
 
-    # write target predictions to file
-    prediction = prediction.values
-    for i, row in enumerate(prediction):
-        query = query_index[i]
-        hits = targets[row]
-        query_hit_filename = os.path.join(
-            output_dir, "{}_hits.txt".format(query))
-        print ("writing hits for query", query,
-            "to", query_hit_filename)
-        with open(query_hit_filename, "w") as f:
-            f.write("\n".join(hits))
     
     probs_filename = os.path.join(output_dir,
         "probs.csv")
     print ("writing probs to", probs_filename)
     prediction_probs.to_csv(probs_filename)
 
-    # rank top n hits for each query
-    n = 100
+    if args.write_hits:
+        write_hits(predictions, output_dir)
 
-    prediction_probs = prediction_probs.values
-    idx = prediction_probs.argsort(axis=-1,)[:, ::-1][:,:n]
-
-    predictions_ranked_filename = os.path.join(output_dir,
-        "top_{}_targets.tsv".format(n))
-    print ("writing top", n, "targets for each query to",
-        predictions_ranked_filename)
-    with open(predictions_ranked_filename, "w") as f:
-        f.write("Query Compound\t{}\n".format(
-            "\t".join(("Target {}".format(i+1) 
-                for i in range(n)))))
-        for i, row in enumerate(idx):
-            f.write("{}".format(query_index[i]))
-            for target_id in row:
-                prob = prediction_probs[i, target_id]
-                if prob > 0:
-                    f.write("\t{}".format(target_mapping[target_id], ))
-            f.write("\n")
+ 
 
 
 if __name__ == "__main__":
