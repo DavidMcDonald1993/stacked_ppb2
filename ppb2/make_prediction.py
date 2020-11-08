@@ -11,18 +11,21 @@ from pathlib import Path
 from models import load_model
 from data_utils import read_smiles
 
-def write_hits(predictions, output_dir):
+def write_hits(prediction, output_dir):
     # write target predictions to file
-    assert isinstance(predictions, pd.DataFrame)
-    if isinstance(predictions, pd.DataFrame):
+    assert isinstance(prediction, pd.DataFrame)
+    prediction = prediction.astype(bool)
+    if isinstance(prediction, pd.DataFrame):
         query_index = prediction.index
         targets = prediction.columns
         prediction = prediction.values
     hit_dir = os.path.join(output_dir,
         "hits")
+    os.makedirs(hit_dir, exist_ok=True)
     for i, row in enumerate(prediction):
         query = query_index[i]
         hits = targets[row]
+        # ignore empty?
         query_hit_filename = os.path.join(
             hit_dir, "{}_hits.txt".format(query))
         print ("writing hits for query", query,
@@ -62,13 +65,14 @@ def parse_args():
     parser.add_argument("--model",)
     parser.add_argument("--output", default="predictions")
 
-    parser.add_argument("--n_proc", default=8, type=int)
+    parser.add_argument("--n_proc", default=4, type=int)
 
     parser.add_argument("-k", 
         default=200, 
         type=int)
     
     parser.add_argument("--write-hits", action="store_true")
+    parser.add_argument("--write-top-hits", action="store_true")
 
     return parser.parse_args()
 
@@ -101,14 +105,17 @@ def main():
     n_queries = queries.shape[0]
     print ("number of queries:", n_queries)
 
-    prediction = model.predict(queries)
-    prediction = prediction.astype(bool)
+    output_dir = os.path.join( # add model name to output dir
+        args.output, 
+        "{}-{}".format(Path(model_filename).stem, Path(query_filename).stem)
+        )
+    os.makedirs(output_dir, exist_ok=True)
 
-    prediction_probs = model.predict_proba(queries)
+    prediction = model.predict(queries).astype(int)
     
     n_targets = prediction.shape[1]
     targets = np.array([target_mapping[t] 
-            for t in range(n_targets)])
+        for t in range(n_targets)])
 
     if not isinstance(prediction, np.ndarray):
         prediction = prediction.A
@@ -116,30 +123,31 @@ def main():
     prediction = pd.DataFrame(prediction, 
         index=query_index,
         columns=targets)
-    prediction_probs = pd.DataFrame(prediction_probs,
-        index=query_index,
-        columns=targets)
-
-    output_dir = os.path.join( # add model name to output dir
-        args.output, 
-        "{}-{}".format(Path(model_filename).stem, Path(query_filename).stem)
-        )
-    os.makedirs(output_dir, exist_ok=True)
 
     prediction_filename = os.path.join(output_dir,
         "predictions.csv")
     print ("writing predictions to", prediction_filename)
     prediction.to_csv(prediction_filename)
 
-    
+
+    if args.write_hits:
+        write_hits(prediction, output_dir)
+
+    del prediction
+
+    prediction_probs = model.predict_proba(queries)
+
+    prediction_probs = pd.DataFrame(prediction_probs,
+        index=query_index,
+        columns=targets)
+
     probs_filename = os.path.join(output_dir,
         "probs.csv")
     print ("writing probs to", probs_filename)
     prediction_probs.to_csv(probs_filename)
 
-    if args.write_hits:
-        write_hits(predictions, output_dir)
-
+    if args.write_top_hits:
+        write_top_k_hits(prediction_probs, output_dir, k=100)
  
 
 

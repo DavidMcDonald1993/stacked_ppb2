@@ -12,7 +12,7 @@ from sklearn.metrics import (roc_auc_score,
 
 from scipy import sparse as sp
 
-from models import get_model_filename, load_model
+from models import get_model_name, load_model
 from data_utils import read_smiles, load_labels, filter_data
 
 import pickle as pkl
@@ -116,12 +116,12 @@ def compute_measures(
 
 def validate(args, split_name):
 
-    model_filename = os.path.join("models", 
-        split_name,
-        get_model_filename(args))
-    assert os.path.exists(model_filename)
-    model = load_model(model_filename)
-    model.set_n_proc(args.n_proc)
+    # model_filename = os.path.join("models", 
+    #     split_name,
+    #     get_model_filename(args))
+    # assert os.path.exists(model_filename)
+    # model = load_model(model_filename)
+    # model.set_n_proc(args.n_proc)
 
     X_test_filename = os.path.join("splits", 
         split_name,
@@ -135,21 +135,35 @@ def validate(args, split_name):
     assert os.path.exists(Y_test_filename)
     Y_test = load_labels(Y_test_filename).A
 
-    X_test, Y_test = filter_data(
-        X_test, Y_test, 
-        min_actives=0, min_hits=1)
+    # X_test, Y_test = filter_data(
+    #     X_test, Y_test, 
+    #     min_actives=0, min_hits=1)
 
     # assert Y_test.any(axis=0).all()
     # assert (1-Y_test).any(axis=0).all()
     assert Y_test.any(axis=1).all()
     assert (1-Y_test).any(axis=1).all()
 
-    predictions = model.predict(X_test)
-    probs = model.predict_proba(X_test)
-    assert isinstance(probs, np.ndarray)
-    assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+    # predictions = model.predict(X_test)
+    # probs = model.predict_proba(X_test)
+    prediction_dir = os.path.join("predictions", 
+        split_name, "{}-test".format(get_model_name(args)))
+    
+    prediction_filename = os.path.join(prediction_dir, 
+        "predictions.csv")
+    assert os.path.exists(prediction_filename)
+    predictions = pd.read_csv(prediction_filename, index_col=0)
 
-    return compute_measures(Y_test, 
+    probs_filename = os.path.join(prediction_dir, 
+        "probs.csv")
+    assert os.path.exists(probs_filename)
+    probs = pd.read_csv(probs_filename, index_col=0)
+
+    assert isinstance(probs, np.ndarray)
+    assert X_test.shape[0] == Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+
+    return compute_measures(
+        Y_test, 
         predictions,
         probs)
 

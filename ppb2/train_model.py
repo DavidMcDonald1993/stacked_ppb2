@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("--compounds")
     parser.add_argument("--targets")
     parser.add_argument("--path")
-    parser.add_argument("--n_proc", default=8, type=int)
+    parser.add_argument("--n_proc", default=4, type=int)
 
     parser.add_argument("--model", default=["morg2-nn+nb"], nargs="+")
 

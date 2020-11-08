@@ -52,13 +52,16 @@ def build_model(args):
         return PPB2(model=model[0],
             n_proc=n_proc)
 
-def get_model_filename(args):
+def get_model_name(args):
     model = args.model
     assert isinstance(model, list)
     if model[0] == "stack":
-        return "stack-({}).pkl".format("&".join(model[1:]))
+        return "stack-({})".format("&".join(model[1:]))
     else:
-        return "{}.pkl".format(model[0])
+        return model[0]
+
+def get_model_filename(args):
+    return get_model_name(args) + ".pkl"
 
 def save_model(model, model_filename):
     print ("pickling model to", model_filename)
@@ -244,7 +247,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "circular", "maccs"}
         self.model_name = model[1]
         assert self.model_name in {"nn", "nb", "nn+nb",
-            "bag", "lr", "svc", "ext", "ridge"}
+            "bag", "lr", "svc", "etc", "ridge"}
         self.n_proc = n_proc
         self.k = k
 
@@ -262,14 +265,21 @@ class PPB2(BaseEstimator, ClassifierMixin):
         elif model_name == "svc":
             self.model = SVC(probability=True)
         elif model_name == "bag":
-            self.model = BaggingClassifier(n_jobs=-1)
+            self.model = BaggingClassifier(
+                n_jobs=self.n_proc)
         elif model_name == "lr":
             self.model = LogisticRegressionCV(
                 max_iter=1000,
-                n_jobs=-1)
-        elif model_name == "ext":
+                n_jobs=self.n_proc)
+        elif model_name == "etc":
             self.model = ExtraTreesClassifier(
+                n_estimators=500,
                 bootstrap=True, 
+                max_features="log2",
+                min_samples_split=10,
+                max_depth=70,
+                min_samples_leaf=3,
+                verbose=True,
                 n_jobs=n_proc) # capable of multilabel classification out of the box
         elif model_name == "ridge":
             self.model = RidgeClassifierCV()
@@ -278,7 +288,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
         """
         """
         assert isinstance(X, pd.Series)
-        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
+        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
 
         assert X.shape[0] == y.shape[0]
 

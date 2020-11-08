@@ -52,7 +52,7 @@ def filter_df(df,
         df["Bioactivity of compound"].str.contains("Kd_nM") 
     ]
     df = df[df.apply(lambda row: 
-        float(row["Bioactivity of compound"].split("_")[-1]) <= max_nM,
+        float(row["Bioactivity of compound"].split("_")[-1]) < max_nM,
         axis=1)]
 
     df = df.groupby('Target ID').filter(
@@ -168,7 +168,7 @@ def main():
         for compound, targets in compounds_to_targets.items()
         for target in targets]
     data = [True] * len(indices)
-    shape = num_compounds, num_targets
+    shape = (num_compounds, num_targets)
 
     targets = sp.csr_matrix(
         (data, tuple(zip(*indices))), 

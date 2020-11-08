@@ -5,8 +5,6 @@ import pandas as pd
 
 from scipy import sparse as sp
 
-import swifter
-
 import pickle as pkl
 
 from rdkit import Chem
@@ -25,7 +23,9 @@ from standardiser import standardise
 
 def get_rdk_mol(smi, perform_standardisation=True):
     mol = Chem.MolFromSmiles(smi)
-    if perform_standardisation:
+    if mol is None:
+        raise Exception
+    if mol is not None and perform_standardisation:
         try:
             mol = standardise.run(mol)
         except standardise.StandardiseException as e:
@@ -34,6 +34,8 @@ def get_rdk_mol(smi, perform_standardisation=True):
 
 def rdk_maccs_wrapper(smi, ):
     mol = get_rdk_mol(smi)
+    if mol is None: 
+        return mol
     assert mol.GetNumAtoms() > 0
     return sp.csr_matrix([bool(bit) 
         for bit in MACCSkeys.GenMACCSKeys(mol)])
@@ -51,15 +53,20 @@ def get_rdk_maccs(smiles, n_proc=8):
             )
 
     else:
-        rdk_maccs_fingerprints = smiles.swifter.apply(
-            rdk_maccs_wrapper)
+        rdk_maccs_fingerprints = smiles.map(
+            rdk_maccs_wrapper, )
         rdk_maccs_fingerprints = list(rdk_maccs_fingerprints.loc[smiles.index])
+
+    rdk_maccs_fingerprints = filter(lambda fp: fp is not None,
+        rdk_maccs_fingerprints)
 
     return sp.vstack(rdk_maccs_fingerprints)
 
 
 def rdk_wrapper(smi, n_bits=1024):
     mol = get_rdk_mol(smi)
+    if mol is None:
+        return mol
     assert mol.GetNumAtoms() > 0
     return sp.csr_matrix([bool(bit) 
         for bit in Chem.RDKFingerprint( mol , fpSize=n_bits )])
@@ -78,10 +85,13 @@ def get_rdk(smiles, n_bits=1024, n_proc=8):
             )
 
     else:
-        rdk_fingerprints = smiles.swifter.apply(lambda smi:
-            rdk_wrapper(smi, n_bits=n_bits)
+        rdk_fingerprints = smiles.map(lambda smi:
+            rdk_wrapper(smi, n_bits=n_bits),
                 )
         rdk_fingerprints = list(rdk_fingerprints.loc[smiles.index])
+
+    rdk_fingerprints = filter(lambda fp: fp is not None,
+        rdk_fingerprints)
 
     return sp.vstack(rdk_fingerprints)
 
@@ -89,6 +99,8 @@ def morg_wrapper(smi,
     radius, 
     n_bits):
     mol = get_rdk_mol(smi)
+    if mol is None:
+        return mol
     assert mol.GetNumAtoms() > 0
     return sp.csr_matrix([bool(bit) 
         for bit in AllChem.GetMorganFingerprintAsBitVect(mol, 
@@ -114,12 +126,15 @@ def get_morg(smiles, radius=2, n_bits=1024, n_proc=8):
             )
 
     else:
-        morgan_fingerprints = smiles.swifter.apply(lambda smi:
+        morgan_fingerprints = smiles.map(lambda smi:
             morg_wrapper( smi, 
                     radius=radius, 
-                    n_bits=n_bits)
+                    n_bits=n_bits),
             )
         morgan_fingerprints = list(morgan_fingerprints.loc[smiles.index])
+
+    morgan_fingerprints = filter(lambda fp: fp is not None,
+        morgan_fingerprints)
 
     return sp.vstack(morgan_fingerprints)
 
@@ -263,7 +278,7 @@ def main():
         if os.path.exists(fingerprints_filename):
             continue
 
-        fingerprints = compute_fp(smiles, fp)
+        fingerprints = compute_fp(smiles, fp, n_proc=4)
         assert fingerprints.shape[0] == num_smiles
         fingerprints_dict = {
             smile: fp for smile, fp
