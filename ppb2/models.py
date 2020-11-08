@@ -112,7 +112,7 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
        
         """
         assert isinstance(X, pd.Series)
-        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
+        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
 
         assert y.any(axis=0).all(), "At least one positive example is needed"
         assert (1-y).any(axis=0).all(), "At least one negative example is needed"
