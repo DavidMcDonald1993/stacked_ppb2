@@ -26,9 +26,6 @@ split=${splits[${split_id}]}
 model=${models[${model_id}]}
 fp=${fps[${fps_id}]}
 
-model=nn+nb 
-fp=rdk_maccs
-
 query=splits/${split}/test.smi 
 
 model=${fp}-${model}
