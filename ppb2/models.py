@@ -35,7 +35,7 @@ import multiprocessing as mp
 import pickle as pkl
 
 dense_input = {"nn", }
-support_multi_label = {"nn", "ext", "ridge"}
+support_multi_label = {"nn", "etc", "ridge"}
 
 def build_model(args):
     model = args.model
