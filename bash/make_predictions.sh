@@ -34,7 +34,7 @@ model_dir=models/${split}
 model_file=${model_dir}/${model}.pkl.gz
 
 output_dir=predictions/${split}
-output_file=${output_dir}/${model}-test/probs.csv
+output_file=${output_dir}/${model}-test/probs.csv.gz
 
 if [ ! -f ${output_file} ]
 then

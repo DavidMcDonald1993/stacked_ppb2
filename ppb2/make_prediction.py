@@ -125,7 +125,7 @@ def main():
         columns=targets)
 
     prediction_filename = os.path.join(output_dir,
-        "predictions.csv")
+        "predictions.csv.gz")
     print ("writing predictions to", prediction_filename)
     prediction.to_csv(prediction_filename)
 
@@ -142,7 +142,7 @@ def main():
         columns=targets)
 
     probs_filename = os.path.join(output_dir,
-        "probs.csv")
+        "probs.csv.gz")
     print ("writing probs to", probs_filename)
     prediction_probs.to_csv(probs_filename)
 
