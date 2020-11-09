@@ -32,7 +32,7 @@ targets=splits/${split}/train.npz
 model=${fp}-${model}
 
 output_dir=models/${split}
-output_file=${output_dir}/${model}.pkl
+output_file=${output_dir}/${model}.pkl.gz
 
 if [ ! -f ${output_file} ]
 then

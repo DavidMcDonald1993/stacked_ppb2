@@ -7,7 +7,7 @@ import pandas as pd
 import pickle as pkl 
 
 from data_utils import read_smiles, load_labels
-from models import build_model, save_model
+from models import build_model, save_model, get_model_filename
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -17,7 +17,8 @@ def parse_args():
     parser.add_argument("--path")
     parser.add_argument("--n_proc", default=4, type=int)
 
-    parser.add_argument("--model", default=["morg2-nn+nb"], nargs="+")
+    parser.add_argument("--model", 
+        default=["morg2-nn+nb"], nargs="+")
 
     return parser.parse_args()
 
@@ -35,13 +36,7 @@ def main():
     model_dir = os.path.join(args.path, )
     os.makedirs(model_dir, exist_ok=True)
 
-    if args.model[0] == "stack":
-        model_filename = os.path.join(model_dir, 
-            "stack-({}).pkl".format("&".join((name
-                    for name, _ in model.classifiers))))
-    else:
-        model_filename = os.path.join(model_dir, 
-            "{}.pkl".format(args.model[0]))
+    model_filename = get_model_filename(args)
 
     if not os.path.exists(model_filename):
 

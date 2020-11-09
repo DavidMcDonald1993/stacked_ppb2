@@ -34,6 +34,8 @@ import multiprocessing as mp
 
 import pickle as pkl
 
+import gzip
+
 dense_input = {"nn", }
 support_multi_label = {"nn", "etc", "ridge"}
 
@@ -61,18 +63,19 @@ def get_model_name(args):
         return model[0]
 
 def get_model_filename(args):
-    return get_model_name(args) + ".pkl"
+    return get_model_name(args) + ".pkl.gz"
 
 def save_model(model, model_filename):
+    assert model_filename.endswith(".pkl.gz")
     print ("pickling model to", model_filename)
-    with open(model_filename, "wb") as f:
+    with gzip.open(model_filename, "wb") as f:
         pkl.dump(model, f, pkl.HIGHEST_PROTOCOL)
 
 def load_model(model_filename):
-    assert model_filename.endswith(".pkl")
+    assert model_filename.endswith(".pkl.gz")
     assert os.path.exists(model_filename), model_filename
     print ("reading model from", model_filename)
-    with open(model_filename, "rb") as f:
+    with gzip.open(model_filename, "rb") as f:
         return pkl.load(f)
 
 class StackedPPB2(BaseEstimator, ClassifierMixin):  

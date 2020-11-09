@@ -34,7 +34,7 @@ for model_name in ${model_arr[@]:2};
 do 
     output_file=${output_file}"&"${model_name}
 done
-output_file=${output_file}").pkl"
+output_file=${output_file}").pkl.gz"
 
 if [ ! -f ${output_file} ]
 then
