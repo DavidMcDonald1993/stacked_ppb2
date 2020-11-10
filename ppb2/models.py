@@ -15,9 +15,12 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegressionCV, RidgeClassifierCV
 
-from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier
+from sklearn.ensemble import (BaggingClassifier, ExtraTreesClassifier, 
+    AdaBoostClassifier, GradientBoostingClassifier)
 
 from sklearn.base import clone
+
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from sklearn.utils.validation import check_is_fitted
 
@@ -36,7 +39,7 @@ import pickle as pkl
 
 import gzip
 
-dense_input = {"nn", }
+dense_input = {"nn", "lda"}
 support_multi_label = {"nn", "etc", "ridge"}
 
 def build_model(args):
@@ -250,7 +253,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "circular", "maccs"}
         self.model_name = model[1]
         assert self.model_name in {"nn", "nb", "nn+nb",
-            "bag", "lr", "svc", "etc", "ridge"}
+            "bag", "lr", "svc", "etc", "ridge", "ada", "gb", "lda"}
         self.n_proc = n_proc
         self.k = k
 
@@ -274,13 +277,19 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model = LogisticRegressionCV(
                 max_iter=1000,
                 n_jobs=self.n_proc)
+        elif model_name == "ada":
+            self.model = AdaBoostClassifier()
+        elif model_name == "gb":
+            self.model = GradientBoostingClassifier()
+        elif model_name == "lda":
+            self.model = LinearDiscriminantAnalysis()
         elif model_name == "etc":
             self.model = ExtraTreesClassifier(
                 n_estimators=500,
                 bootstrap=True, 
                 max_features="log2",
                 min_samples_split=10,
-                max_depth=70,
+                max_depth=5,
                 min_samples_leaf=3,
                 verbose=True,
                 n_jobs=n_proc) # capable of multilabel classification out of the box
@@ -319,7 +328,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             X = X.A
 
         if self.model_name == "nn+nb": # keep training data references for local NB fitting
-            self.X = X#.astype(int) 
+            self.X = X
             self.y = y
 
         assert X.shape[0] == y.shape[0]
@@ -328,7 +337,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             print ("fitting", self.model_name, "model to", 
                 X.shape[0], self.fp, "fingerprints", 
                 "for", y.shape[1], "targets",
-                "using", self.n_proc, "cores")
+                "using", self.n_proc, "core(s)")
 
             self.model.fit(X, y)
 

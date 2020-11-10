@@ -36,7 +36,8 @@ def main():
     model_dir = os.path.join(args.path, )
     os.makedirs(model_dir, exist_ok=True)
 
-    model_filename = get_model_filename(args)
+    model_filename = os.path.join(model_dir,
+        get_model_filename(args))
 
     if not os.path.exists(model_filename):
 

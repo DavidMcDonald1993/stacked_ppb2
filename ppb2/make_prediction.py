@@ -11,6 +11,8 @@ from pathlib import Path
 from models import load_model
 from data_utils import read_smiles
 
+from db_utils import write_hits_to_db, write_probs_to_db
+
 def write_hits(prediction, output_dir):
     # write target predictions to file
     assert isinstance(prediction, pd.DataFrame)
@@ -72,6 +74,7 @@ def parse_args():
         type=int)
     
     parser.add_argument("--write-hits", action="store_true")
+    parser.add_argument("--write-probs", action="store_true")
     parser.add_argument("--write-top-hits", action="store_true")
 
     return parser.parse_args()
@@ -129,9 +132,9 @@ def main():
     print ("writing predictions to", prediction_filename)
     prediction.to_csv(prediction_filename)
 
-
     if args.write_hits:
-        write_hits(prediction, output_dir)
+        # write_hits(prediction, output_dir)
+        write_hits_to_db(model_filename, prediction)
 
     del prediction
 
@@ -149,7 +152,8 @@ def main():
     if args.write_top_hits:
         write_top_k_hits(prediction_probs, output_dir, k=100)
  
-
+    if args.write_probs:
+        write_probs_to_db(model_filename, prediction_probs)
 
 if __name__ == "__main__":
     main()
