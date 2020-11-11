@@ -77,38 +77,55 @@ def compute_measures(
     p_at_k = compute_p_at_k(labels, pred, 
         probs, k=k, n_proc=n_proc)
 
-    # labels = labels.T
-    # pred = pred.T
-    # probs = probs.T
-    # # shape is now n_targets x n_compounds
+    if n_proc > 1:
 
-    # roc = roc_auc_score(labels, probs, average=None)
-    with mp.Pool(processes=n_proc) as p:
-        roc = np.array(p.starmap(roc_auc_score, 
-            iterable=zip(labels, probs)))
-    print ("computed ROC")
-    # ap = average_precision_score(labels, probs, average=None)
-    with mp.Pool(processes=n_proc) as p:
+        with mp.Pool(processes=n_proc) as p:
+            roc = np.array(p.starmap(roc_auc_score, 
+                iterable=zip(labels, probs)))
+        print ("computed ROC")
+
+        with mp.Pool(processes=n_proc) as p:
         ap = np.array(p.starmap(average_precision_score, 
             iterable=zip(labels, probs)))
-    print ("computed AP")
+        print ("computed AP")
 
-    # f1 = f1_score(labels, pred, average=None )
-    with mp.Pool(processes=n_proc) as p:
-        f1 = np.array(p.starmap(f1_score, 
-            iterable=zip(labels, pred)))
-    print ("computed F1")
-    # precision = precision_score(labels, pred, average=None )
-    with mp.Pool(processes=n_proc) as p:
-        precision = np.array(p.starmap(precision_score, 
-            iterable=zip(labels, pred)))
-    print ("computed precision")
-    # recall = recall_score(labels, pred, average=None )
-    with mp.Pool(processes=n_proc) as p:
-        recall = np.array(p.starmap(recall_score, 
-            iterable=zip(labels, pred)))
-    print ("computed recall")
+        with mp.Pool(processes=n_proc) as p:
+            f1 = np.array(p.starmap(f1_score, 
+                iterable=zip(labels, pred)))
+        print ("computed F1")
 
+        with mp.Pool(processes=n_proc) as p:
+            precision = np.array(p.starmap(precision_score, 
+                iterable=zip(labels, pred)))
+        print ("computed precision")
+
+        with mp.Pool(processes=n_proc) as p:
+            recall = np.array(p.starmap(recall_score, 
+                iterable=zip(labels, pred)))
+        print ("computed recall")
+
+    else:
+
+        labels = labels.T
+        pred = pred.T
+        probs = probs.T
+        # # shape is now n_targets x n_compounds
+
+        roc = roc_auc_score(labels, probs, average=None)
+        print ("computed ROC")
+    
+        ap = average_precision_score(labels, probs, average=None)
+        print ("computed AP")
+
+        f1 = f1_score(labels, pred, average=None )
+        print ("computed F1")
+
+        precision = precision_score(labels, pred, average=None )
+        print ("computed precision")
+
+        recall = recall_score(labels, pred, average=None )
+        print ("computed recall")
+        
     assert len(roc) == len(ap) == len(f1) == len(precision) == len(recall) == n_queries
 
     return (p_at_k.mean(), roc.mean(), ap.mean(), f1.mean(), 
@@ -150,14 +167,16 @@ def validate(args, split_name):
         split_name, "{}-test".format(get_model_name(args)))
     
     prediction_filename = os.path.join(prediction_dir, 
-        "predictions.csv")
+        "predictions.csv.gz")
     assert os.path.exists(prediction_filename)
     predictions = pd.read_csv(prediction_filename, index_col=0)
+    predictions = predictions.values
 
     probs_filename = os.path.join(prediction_dir, 
-        "probs.csv")
+        "probs.csv.gz")
     assert os.path.exists(probs_filename)
     probs = pd.read_csv(probs_filename, index_col=0)
+    probs = probs.values
 
     assert isinstance(probs, np.ndarray)
     assert X_test.shape[0] == Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
@@ -219,7 +238,7 @@ def parse_args():
     parser.add_argument("--model", 
         default=["morg2-nn+nb"], nargs="+",)
 
-    parser.add_argument("--n_proc", default=8, type=int)
+    parser.add_argument("--n_proc", default=1, type=int)
 
     return parser.parse_args()
 
@@ -232,11 +251,7 @@ def main():
         n_splits=5,
         k=5)
 
-    if args.model[0] == "stack":
-        name = "stack-({})".format(
-            "&".join(args.model[1:]))
-    else:
-        name = args.model[0]
+    name = get_model_name(args)
     cross_validation_results.name = name
 
     print ("results:")

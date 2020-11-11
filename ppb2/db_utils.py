@@ -8,7 +8,7 @@ import pandas as pd
 
 HOST = "192.168.0.49"
 PORT = 27017
-DB = "test"
+DB = "COCONUT"
 
 def connect_to_db():
     print ("connecting to MongoDB database", 
@@ -16,6 +16,9 @@ def connect_to_db():
         HOST, "and port", PORT)
     client = MongoClient(HOST, PORT)
     return client[DB]
+
+def count_documents(collection, filter={}):
+    return collection.count_documents(filter=filter)
 
 def clear_collection(collection, filter={}):
     collection.remove(filter=filter)
@@ -30,16 +33,17 @@ def add_compounds(compounds):
 
     db.client.close()
 
-def write_hits_to_db(model_name, predictions):
+def write_hits_to_db(model_name, predictions,
+    collection="hits"):
     assert isinstance(model_name, str)
     assert isinstance(predictions, pd.DataFrame)
 
     db = connect_to_db()
 
-    print ("writing hits to MongoDB")
+    print ("writing hits to MongoDB:", DB, 
+        "collection:", collection)
 
-
-    hit_collection = db["hits"]
+    hit_collection = db[collection]
 
     records = []
 
@@ -50,8 +54,10 @@ def write_hits_to_db(model_name, predictions):
         for target in row.index:
             if row[target]:
                 records.append({
-                    "compound_chembl_id": compound,
-                    "target_chembl_id": target,
+                    # "compound_chembl_id": compound,
+                    "compound": compound,
+                    # "target_chembl_id": target,
+                    "target": target,
                     "model": model_name,
                     "time": str(datetime.now())
                 })
@@ -62,26 +68,30 @@ def write_hits_to_db(model_name, predictions):
     db.client.close()
 
 
-def write_probs_to_db(model_name, probs):
+def write_probs_to_db(model_name, probs,
+    collection="probabilities"):
     assert isinstance(model_name, str)
     assert isinstance(probs, pd.DataFrame)
     db = connect_to_db()
 
-    print ("writing hit probabilities to MongoDB")
+    print ("writing hit probabilities to MongoDB:",
+        DB, "collection:", collection)
 
-    prob_collection = db["hit_probabilities"]
+    prob_collection = db[collection]
 
     records = []
 
-    print ("idenitying non-zero probabilities")
+    print ("identifying non-zero probabilities")
 
     for compound, row in probs.iterrows():
         
         for target in row.index:
             if row[target] > 0:
                 records.append({
-                    "compound_chembl_id": compound,
-                    "target_chembl_id": target,
+                    # "compound_chembl_id": compound,
+                    "compound": compound,
+                    # "target_chembl_id": target,
+                    "target": target,
                     "probability": row[target],
                     "model": model_name,
                     "time": str(datetime.now())
@@ -92,28 +102,33 @@ def write_probs_to_db(model_name, probs):
 
     db.client.close()
 
-
 def main():
 
-    predictions = pd.DataFrame(
-        [[0, 0, 1], 
-        [1, 1, 1],
-        [1, 0, 0]], 
-        index=["compound_1", "compound_2", "compound_3"],
-        columns=["target_1", "target_2", "target_3"],
-        dtype=bool)
+    db = connect_to_db()
 
-    write_hits_to_db("maccs-nb", predictions)
+    hit_collection = db["hits"]
 
-    np.random.seed(0)
+    print (count_documents(hit_collection))
 
-    probs = pd.DataFrame(
-        np.random.rand(3, 3), 
-        index=["compound_1", "compound_2", "compound_3"],
-        columns=["target_1", "target_2", "target_3"],
-        )
+    # predictions = pd.DataFrame(
+    #     [[0, 0, 1], 
+    #     [1, 1, 1],
+    #     [1, 0, 0]], 
+    #     index=["compound_1", "compound_2", "compound_3"],
+    #     columns=["target_1", "target_2", "target_3"],
+    #     dtype=bool)
 
-    write_probs_to_db("maccs-nb", probs)
+    # write_hits_to_db("maccs-nb", predictions)
+
+    # np.random.seed(0)
+
+    # probs = pd.DataFrame(
+    #     np.random.rand(3, 3), 
+    #     index=["compound_1", "compound_2", "compound_3"],
+    #     columns=["target_1", "target_2", "target_3"],
+    #     )
+
+    # write_probs_to_db("maccs-nb", probs)
 
     
 if __name__ == "__main__":

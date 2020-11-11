@@ -8,6 +8,8 @@ import functools
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
+from sklearn.dummy import DummyClassifier
+
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.multiclass import OneVsRestClassifier
@@ -17,6 +19,8 @@ from sklearn.linear_model import LogisticRegressionCV, RidgeClassifierCV
 
 from sklearn.ensemble import (BaggingClassifier, ExtraTreesClassifier, 
     AdaBoostClassifier, GradientBoostingClassifier)
+
+from xgboost import XGBClassifier
 
 from sklearn.base import clone
 
@@ -40,7 +44,7 @@ import pickle as pkl
 import gzip
 
 dense_input = {"nn", "lda"}
-support_multi_label = {"nn", "etc", "ridge"}
+support_multi_label = {"nn", "etc", }
 
 def build_model(args):
     model = args.model
@@ -252,13 +256,17 @@ class PPB2(BaseEstimator, ClassifierMixin):
         assert self.fp in {"rdk", "morg2", "morg3", "rdk_maccs",
             "circular", "maccs"}
         self.model_name = model[1]
-        assert self.model_name in {"nn", "nb", "nn+nb",
-            "bag", "lr", "svc", "etc", "ridge", "ada", "gb", "lda"}
+        assert self.model_name in {"dum", "nn", "nb", "nn+nb",
+            "bag", "lr", "svc", "etc", "ridge", "ada", "gb", "lda",
+            "xgc"}
         self.n_proc = n_proc
         self.k = k
 
-        model_name = self.model_name   
-        if model_name == "nn":
+        model_name = self.model_name  
+        if model_name == "dum":
+            self.model = DummyClassifier(
+                strategy="stratified")
+        elif model_name == "nn":
             self.model = KNeighborsClassifier(
                 n_neighbors=self.k,
                 metric="jaccard", 
@@ -295,6 +303,10 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 n_jobs=n_proc) # capable of multilabel classification out of the box
         elif model_name == "ridge":
             self.model = RidgeClassifierCV()
+        elif model_name == "xgc":
+            self.model = XGBClassifier()
+        else:
+            raise Exception
         
     def fit(self, X, y):
         """
@@ -543,6 +555,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             if self.model_name in dense_input \
                 and not isinstance(X, np.ndarray):
                 X = X.A
+            assert hasattr(self.model, "predict")
             return self.model.predict(X)
 
     def predict_proba(self, X):
@@ -575,7 +588,46 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         else:
             assert isinstance(self.model, OneVsRestClassifier)
-            return self.model.predict_proba(X)
+            if hasattr(self.model, "predict_proba"):
+                return self.model.predict_proba(X)
+            elif hasattr(self.model, "decision_function"):
+                print ("predicting with decision function")
+                return self.model.decision_function(X)
+            else:
+                raise Exception
+
+    def decision_function(self, X):
+        print ("predicting probabilities for", X.shape[0], 
+            "query molecules")
+        X = compute_fp(X, self.fp, n_proc=self.n_proc)
+        print ("determining decision function",
+            "using", self.n_proc, "processes")
+        if self.model_name == "nn+nb":
+           
+            return self._local_nb_prediction(
+                X,
+                mode="predict_proba") # NB does not have a decision function
+
+        if self.model_name in dense_input \
+            and not isinstance(X, np.ndarray):
+            X = X.A
+
+        if self.model_name in support_multi_label: # k neigbours has no decision function
+            probs = self.model.predict_proba(X) # handle missing classes correctly
+            classes = self.model.classes_
+            return np.hstack([probs[:,idx] if idx.any() else 1-probs
+                for probs, idx in zip(probs, classes)]) # check for existence of positive class
+
+        else:
+            assert isinstance(self.model, OneVsRestClassifier)
+
+            if hasattr(self.model, "decision_function"):
+                return self.model.decision_function(X)
+            elif hasattr(self.model, "predict_proba"):
+                print ("predicting using probability")
+                return self.model.predict_proba(X)
+            else:
+                raise Exception
 
     def check_is_fitted(self):
         if self.model is None:
