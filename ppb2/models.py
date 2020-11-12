@@ -15,7 +15,7 @@ from sklearn.naive_bayes import BernoulliNB
 from sklearn.multiclass import OneVsRestClassifier
 
 from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegressionCV, RidgeClassifierCV
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifierCV
 
 from sklearn.ensemble import (BaggingClassifier, ExtraTreesClassifier, 
     AdaBoostClassifier, GradientBoostingClassifier)
@@ -42,6 +42,8 @@ import multiprocessing as mp
 import pickle as pkl
 
 import gzip
+
+from joblib import parallel_backend
 
 dense_input = {"nn", "lda"}
 support_multi_label = {"nn", "etc", }
@@ -92,7 +94,7 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
         models=["morg2-nn+nb", "morg3-nn+nb"],
         n_splits=5,
         stack_method="predict_proba",
-        final_estimator=LogisticRegressionCV(),
+        final_estimator=LogisticRegression(max_iter=1000),
         n_proc=8,
         passthrough=False):
 
@@ -122,10 +124,11 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
        
         """
         assert isinstance(X, pd.Series)
-        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
 
         assert y.any(axis=0).all(), "At least one positive example is needed"
         assert (1-y).any(axis=0).all(), "At least one negative example is needed"
+
+        print ("Fitting meta-estimators using cross-validation")
 
         if  len(y.shape) == 1:
             print ("fitting in the single-target setting")
@@ -143,7 +146,7 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             self.n_targets = y.shape[1]
 
             meta_preds = np.empty((X.shape[0], len(self.classifiers), self.n_targets, ))
-            
+
         for i, (name, classifier) in enumerate(self.classifiers):
             print ("fitting classifier:", name)
             for split_no, (train, test) in enumerate(self.split.split(X, y)):
@@ -162,27 +165,41 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             y = y.A
 
         if self.multi_label:
-            print ("fitting final estimators")
+            print ("fitting meta estimators")
             if not isinstance(self.final_estimator, list):
                 self.final_estimator = [
                     clone(self.final_estimator) 
                         for _ in range(self.n_targets)]
 
             for target_id in range(self.n_targets):
-                self.final_estimator[target_id].fit(meta_preds[...,target_id], y[:,target_id])
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    self.final_estimator[target_id].fit(
+                        meta_preds[...,target_id], y[:,target_id])
+
+                print ("completed fitting meta estimator for target", 
+                    target_id+1, "/", self.n_targets, "targets")
         else:
 
-            print ("fitting final estimator")
+            print ("fitting meta estimator")
             self.final_estimator.fit(meta_preds, y)
 
-        print ("completed fitting of final estimators")
+        print ("completed fitting of meta estimator(s)")
+        print ()
+        
+        print ("fitting base estimator(s) using full training set")
+        for i, (name, classifier) in enumerate(self.classifiers):
+            print ("fitting classifier", name)
+            classifier.fit(X, y)
+            print ("completed classifier", name, )
+            print ()
+
         print ()
 
         return self
 
     def predict(self, X):
         assert isinstance(X, pd.Series)
-        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
+        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
 
         if self.multi_label:
             meta_preds = np.empty((X.shape[0], len(self.classifiers), self.n_targets, ))
@@ -202,7 +219,8 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             final_pred = np.empty((X.shape[0], self.n_targets))
             for target_id in range(self.n_targets):
                 check_is_fitted(self.final_estimator[target_id])
-                final_pred[:,target_id] = self.final_estimator[target_id].predict(meta_preds[..., target_id])
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    final_pred[:,target_id] = self.final_estimator[target_id].predict(meta_preds[..., target_id])
             return final_pred
         else:
             check_is_fitted(self.final_estimator)
@@ -210,11 +228,10 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
 
     def predict_proba(self, X):
         assert isinstance(X, pd.Series)
-        assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
+        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
 
         if self.multi_label:
             meta_preds = np.empty((X.shape[0], len(self.classifiers), self.n_targets, ))
-
         else: 
             meta_preds = np.empty((X.shape[0], len(self.classifiers), ))
 
@@ -231,12 +248,14 @@ class StackedPPB2(BaseEstimator, ClassifierMixin):
             for target_id in range(self.n_targets):
                 check_is_fitted(self.final_estimator[target_id])
                 assert self.final_estimator[target_id].classes_[1]
-                final_pred[:,target_id] = self.final_estimator[target_id].predict_proba(meta_preds[..., target_id])[:,1]
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    final_pred[:,target_id] = self.final_estimator[target_id].predict_proba(meta_preds[..., target_id])[:,1]
             return final_pred
         else:
             check_is_fitted(self.final_estimator)
             assert self.final_estimator.classes_[1]
-            return self.final_estimator.predict_proba(meta_preds)[:, 1]
+            with parallel_backend('threading', n_jobs=self.n_proc):
+                return self.final_estimator.predict_proba(meta_preds)[:, 1]
 
     def set_n_proc(self, n_proc):
         self.n_proc = n_proc
@@ -351,7 +370,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 "for", y.shape[1], "targets",
                 "using", self.n_proc, "core(s)")
 
-            self.model.fit(X, y)
+            with parallel_backend('threading', n_jobs=self.n_proc):
+                self.model.fit(X, y)
 
         return self
 
@@ -556,7 +576,9 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 and not isinstance(X, np.ndarray):
                 X = X.A
             assert hasattr(self.model, "predict")
-            return self.model.predict(X)
+
+            with parallel_backend('threading', n_jobs=self.n_proc):
+                return self.model.predict(X)
 
     def predict_proba(self, X):
         print ("predicting probabilities for", X.shape[0], 
@@ -581,7 +603,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
             X = X.A
 
         if self.model_name in support_multi_label:
-            probs = self.model.predict_proba(X) # hangle missing classes correctly
+            with parallel_backend('threading', n_jobs=self.n_proc):
+                probs = self.model.predict_proba(X) # handle missing classes correctly
             classes = self.model.classes_
             return np.hstack([probs[:,idx] if idx.any() else 1-probs
                 for probs, idx in zip(probs, classes)]) # check for existence of positive class
@@ -589,10 +612,12 @@ class PPB2(BaseEstimator, ClassifierMixin):
         else:
             assert isinstance(self.model, OneVsRestClassifier)
             if hasattr(self.model, "predict_proba"):
-                return self.model.predict_proba(X)
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    return self.model.predict_proba(X)
             elif hasattr(self.model, "decision_function"):
                 print ("predicting with decision function")
-                return self.model.decision_function(X)
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    return self.model.decision_function(X)
             else:
                 raise Exception
 
@@ -613,7 +638,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
             X = X.A
 
         if self.model_name in support_multi_label: # k neigbours has no decision function
-            probs = self.model.predict_proba(X) # handle missing classes correctly
+            with parallel_backend('threading', n_jobs=self.n_proc):
+                probs = self.model.predict_proba(X) # handle missing classes correctly
             classes = self.model.classes_
             return np.hstack([probs[:,idx] if idx.any() else 1-probs
                 for probs, idx in zip(probs, classes)]) # check for existence of positive class
@@ -622,10 +648,12 @@ class PPB2(BaseEstimator, ClassifierMixin):
             assert isinstance(self.model, OneVsRestClassifier)
 
             if hasattr(self.model, "decision_function"):
-                return self.model.decision_function(X)
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    return self.model.decision_function(X)
             elif hasattr(self.model, "predict_proba"):
                 print ("predicting using probability")
-                return self.model.predict_proba(X)
+                with parallel_backend('threading', n_jobs=self.n_proc):
+                    return self.model.predict_proba(X)
             else:
                 raise Exception
 

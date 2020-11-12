@@ -96,8 +96,10 @@ def main():
 
     model_filename = args.model 
     model = load_model(model_filename)
-    model.set_k(args.k)
-    model.set_n_proc(args.n_proc)
+    if hasattr(model, "set_k"):
+        model.set_k(args.k)
+    if hasattr(model, "n_proc"):
+        model.set_n_proc(args.n_proc)
 
     # load queries (SMILES format)
     query_filename = args.query 
