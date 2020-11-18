@@ -85,8 +85,8 @@ def compute_measures(
         print ("computed ROC")
 
         with mp.Pool(processes=n_proc) as p:
-        ap = np.array(p.starmap(average_precision_score, 
-            iterable=zip(labels, probs)))
+            ap = np.array(p.starmap(average_precision_score, 
+                iterable=zip(labels, probs)))
         print ("computed AP")
 
         with mp.Pool(processes=n_proc) as p:
