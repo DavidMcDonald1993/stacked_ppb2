@@ -425,8 +425,9 @@ class PPB2(BaseEstimator, ClassifierMixin):
         # return k_nearest_samples, k_nearest_labels
 
     def _fit_local_nb(self,
-        query, #X, y, 
-        mode="predict"):
+        query,
+        mode="predict",
+        alpha=1.):
 
         if len(query.shape) == 1:
             query = query[None, :]
@@ -441,15 +442,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         # sparse jaccard distance
         assert query.shape[1] == X.shape[1]
-
-        # intersect = query.dot(X.T)
-
-        # query_sum = query.sum(axis=1).A1
-        # x_sum = X.sum(axis=1).A1
-        # xx, yy = np.meshgrid(query_sum, x_sum)
-        # union = ((xx + yy).T - intersect)
-
-        # dists = (1 - intersect / union).A1
         dists = pairwise_distances(query.A, X.A, 
             metric="jaccard", n_jobs=1)
         idx = dists.argsort()[0, :self.k]
@@ -465,53 +457,29 @@ class PPB2(BaseEstimator, ClassifierMixin):
         ones_idx = y.all(axis=0)
         zeros_idx = (1-y).all(axis=0)
 
+        # set prediction for classes where only positive class
+        # is seen
         pred[ones_idx] = 1
 
         # only fit on targets with pos and neg examples
         idx = ~np.logical_or(ones_idx, zeros_idx)
         if idx.any():
-            nb = OneVsRestClassifier(
-                BernoulliNB(alpha=1.),
-                n_jobs=1)
-            nb.fit(X, y[:,idx])
-            pred[idx] = (nb.predict(query)[0] if mode=="predict"
-                else nb.predict_proba(query)[0])
+            nb = BernoulliNB(alpha=alpha)
+            if idx.sum() > 1:
+                nb = OneVsRestClassifier(nb, n_jobs=1)
+            y_ = y[:,idx]
+            if idx.sum() == 1:
+                y_ = y_.flatten()
+            nb.fit(X, y_)
+            pred_ = (nb.predict(query)[0] 
+                if mode=="predict"
+                    else nb.predict_proba(query)[0])
+            if idx.sum() == 1 and mode != "predict":
+                assert pred_.shape[0] == 2
+                assert nb.classes_.any()
+                pred_ = pred_[nb.classes_==1]
+            pred[idx] = pred_
         return pred
-
-        # if self.multi_label:
-        #     assert len(y.shape) == 2
-        #     nb = OneVsRestClassifier(
-        #         BernoulliNB(alpha=1.),
-        #         n_jobs=1)
-
-        #     pred = np.zeros(y.shape[1])
-            
-        #     ones_idx = y.all(axis=0)
-        #     zeros_idx = (1-y).all(axis=0)
-
-        #     pred[ones_idx] = 1
-
-        #     # only fit on targets with pos and neg examples
-        #     idx = ~np.logical_or(ones_idx, zeros_idx)
-        #     if idx.any():
-        #         nb.fit(X, y[:,idx])
-        #         pred[idx] = (nb.predict(query)[0] if mode=="predict"
-        #             else nb.predict_proba(query)[0])
-        #     return pred
-
-        # else:
-        #     assert len(y.shape) == 1
-        #     nb = BernoulliNB(alpha=1.)
-
-        #     if y.all():
-        #         return 1
-        #     if (1-y).all():
-        #         return 0
-
-        #     nb.fit(X, y)
-
-        #     return (nb.predict(query)[0] if mode=="predict"
-        #         else nb.predict_proba(query)[0])
 
     def _local_nb_prediction(self, 
         queries, 
@@ -521,10 +489,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "in mode", mode)
 
         n_queries = queries.shape[0]
-        # if self.multi_label:
-            # assert len(y.shape) == 3
-            # n_targets = y.shape[-1]
-        
+
         with mp.Pool(processes=self.n_proc) as p:
             predictions = p.map(
                 functools.partial(self._fit_local_nb, mode=mode),

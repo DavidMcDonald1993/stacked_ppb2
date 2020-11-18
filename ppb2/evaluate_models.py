@@ -152,19 +152,11 @@ def validate(args, split_name):
     assert os.path.exists(Y_test_filename)
     Y_test = load_labels(Y_test_filename).A
 
-    # X_test, Y_test = filter_data(
-    #     X_test, Y_test, 
-    #     min_actives=0, min_hits=1)
-
-    # assert Y_test.any(axis=0).all()
-    # assert (1-Y_test).any(axis=0).all()
     assert Y_test.any(axis=1).all()
     assert (1-Y_test).any(axis=1).all()
 
-    # predictions = model.predict(X_test)
-    # probs = model.predict_proba(X_test)
     prediction_dir = os.path.join("predictions", 
-        split_name, "{}-test".format(get_model_name(args)))
+        split_name, "{}.pkl-test".format(get_model_name(args)))
     
     prediction_filename = os.path.join(prediction_dir, 
         "predictions.csv.gz")
