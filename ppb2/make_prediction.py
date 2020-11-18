@@ -9,9 +9,10 @@ import pickle as pkl
 from pathlib import Path
 
 from models import load_model
-from data_utils import read_smiles
+from data_utils import read_smiles, sdf_to_smiles
 
-from db_utils import write_hits_to_db, write_probs_to_db
+from db_utils import write_hits_to_db, write_probs_to_db, write_pathway_enrichment_to_db
+from enrichment_analysis import perform_enrichment_analysis
 
 def write_hits(prediction, output_dir):
     # write target predictions to file
@@ -76,6 +77,7 @@ def parse_args():
     parser.add_argument("--write-hits", action="store_true")
     parser.add_argument("--write-probs", action="store_true")
     parser.add_argument("--write-top-hits", action="store_true")
+    parser.add_argument("--perform_enrichment", action="store_true")
 
     return parser.parse_args()
 
@@ -104,7 +106,14 @@ def main():
     # load queries (SMILES format)
     query_filename = args.query 
     print ("reading_queries from", query_filename)
-    queries = read_smiles(query_filename)
+    if query_filename.endswith(".sdf"):
+        print ("converting from .SDF")
+        queries = sdf_to_smiles(query_filename, 
+            # index="coconut_id" #TODO
+            )
+    else:
+        print ("reading SMILES")
+        queries = read_smiles(query_filename)
 
     query_index = queries.index 
     n_queries = queries.shape[0]
@@ -137,6 +146,29 @@ def main():
     if args.write_hits:
         # write_hits(prediction, output_dir)
         write_hits_to_db(model_filename, prediction)
+
+    # identify target hits
+    if args.perform_enrichment:
+        targets_hit = targets[prediction.any(axis=0)]
+        hit_filename = os.path.join(output_dir,
+            "all_hits.txt")
+        print ("writing hits to", hit_filename)
+        with open(hit_filename, "w") as f:
+            f.write("\n".join(targets_hit))
+
+        enrichment, found, not_found = \
+            perform_enrichment_analysis(hit_filename,
+            csv_filename=os.path.join(output_dir, "enrichment.csv"),
+            found_filename=os.path.join(output_dir, "found.txt"),
+            not_found_filename=os.path.join(output_dir, "not_found.txt"),
+            pdf_filename=os.path.join(output_dir, "enrichment.pdf"),
+            )
+
+        write_pathway_enrichment_to_db(model_filename,
+            targets_hit,
+            enrichment,
+            found,
+            not_found)
 
     del prediction
 

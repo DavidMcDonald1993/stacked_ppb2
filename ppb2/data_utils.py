@@ -8,16 +8,21 @@ import scipy.sparse as sp
 from skmultilearn.model_selection import IterativeStratification
 
 from rdkit import Chem
+from rdkit.Chem.PandasTools import LoadSDF
 
-def sdf_to_smiles(filename, smiles_name="SMILES"):
+def sdf_to_smiles(filename, 
+    smiles_name="SMILES",
+    index=None):
     assert filename.endswith(".sdf")
-    print ("reading molecules from sfd file:", filename)
-    mol_df = Chem.PandasTools.LoadSDF(filename, 
+    print ("reading molecules from sdf file:", filename)
+    mol_df = LoadSDF(filename, 
         smilesName=smiles_name, molColName=None)
     print ("removing molecules with missing SMILES")
     mol_df = mol_df[~mol_df[smiles_name].isnull()]
     print ("identified", mol_df.shape[0], "molecules")
-    return mol_df
+    if index is not None and index in mol_df.columns:
+        mol_df = mol_df.set_index(index)
+    return mol_df[smiles_name]
     
 
 def valid_smiles(smi):

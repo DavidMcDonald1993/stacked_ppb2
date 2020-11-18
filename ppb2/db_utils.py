@@ -10,12 +10,12 @@ HOST = "192.168.0.49"
 PORT = 27017
 DB = "COCONUT"
 
-def connect_to_db():
+def connect_to_db(host=HOST, port=PORT, db=DB):
     print ("connecting to MongoDB database", 
-        DB, "using host",
-        HOST, "and port", PORT)
-    client = MongoClient(HOST, PORT)
-    return client[DB]
+        db, "using host",
+        host, "and port", port)
+    client = MongoClient(host, port)
+    return client[db]
 
 def count_documents(collection, filter={}):
     return collection.count_documents(filter=filter)
@@ -33,7 +33,9 @@ def add_compounds(compounds):
 
     db.client.close()
 
-def write_hits_to_db(model_name, predictions,
+def write_hits_to_db(
+    model_name, 
+    predictions,
     collection="hits"):
     assert isinstance(model_name, str)
     assert isinstance(predictions, pd.DataFrame)
@@ -68,7 +70,9 @@ def write_hits_to_db(model_name, predictions,
     db.client.close()
 
 
-def write_probs_to_db(model_name, probs,
+def write_probs_to_db(
+    model_name, 
+    probs,
     collection="probabilities"):
     assert isinstance(model_name, str)
     assert isinstance(probs, pd.DataFrame)
@@ -99,6 +103,49 @@ def write_probs_to_db(model_name, probs,
 
     print ("inserting", len(records), "records")
     prob_collection.insert_many(records)
+
+    db.client.close()
+
+def write_pathway_enrichment_to_db(
+    model_name,
+    targets_hit,
+    enrichment,
+    found, 
+    not_found,
+    collection="enrichment"):
+
+    assert isinstance(model_name, str)
+    if not isinstance(targets_hit, list):
+        targets_hit = list(targets_hit)
+    assert isinstance(enrichment, pd.DataFrame)
+    assert isinstance(found, pd.DataFrame)
+    assert isinstance(not_found, list)
+
+    db = connect_to_db(db="test")
+
+    print ("writing enriched pathways to MongoDB:",
+        DB, "collection:", collection)
+
+    enrichment_collection = db[collection]
+
+    print ("number of targets hit:", len(targets_hit))
+    print ("number of enriched pathways:", enrichment.shape[0])
+
+    print ("converting enrichment to dictionary")
+    enrichment = enrichment.to_dict(orient="index")
+
+    print ("converting found to dictionary")
+    found = found.to_dict(orient="index")
+
+    record = {"targets_hit": targets_hit,
+        "pathways": enrichment,
+        "found": found,
+        "not_found": not_found,
+        "model": model_name,
+        "time": str(datetime.now())}
+    
+    print ("inserting enrichment into database")
+    enrichment_collection.insert(record)
 
     db.client.close()
 
