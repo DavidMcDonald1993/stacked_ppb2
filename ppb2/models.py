@@ -266,14 +266,14 @@ class PPB2(BaseEstimator, ClassifierMixin):
     """PPB2 model"""
     
     def __init__(self, 
-        model="morg2&nn+nb",
+        model="morg2-nn+nb",
         n_proc=8,
         k=200):
         model = model.split("-")
         assert len(model) == 2
         self.fp = model[0]
         assert self.fp in {"rdk", "morg2", "morg3", "rdk_maccs",
-            "circular", "maccs"}
+            "circular", "maccs", "all"}
         self.model_name = model[1]
         assert self.model_name in {"dum", "nn", "nb", "nn+nb",
             "bag", "lr", "svc", "etc", "ridge", "ada", "gb", "lda",
@@ -331,8 +331,6 @@ class PPB2(BaseEstimator, ClassifierMixin):
         """
         """
         assert isinstance(X, pd.Series)
-        # assert (X.dtype==pd.StringDtype()), "X should be a vector of smiles"
-
         assert X.shape[0] == y.shape[0]
 
         print ("fitting PPB2 model", 
@@ -366,7 +364,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         if self.model is not None:
             print ("fitting", self.model_name, "model to", 
-                X.shape[0], self.fp, "fingerprints", 
+                X.shape[0], "'", self.fp, "' fingerprints", 
+                "of shape", X.shape, 
                 "for", y.shape[1], "targets",
                 "using", self.n_proc, "core(s)")
 
@@ -512,29 +511,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
 
         if self.model_name == "nn+nb":
 
-            # X = X.astype(int)
-            
-            # with mp.Pool(processes=).
-
-            # self._fit_local_nb(X[0])
-
-            # return np.vstack([
-            #     self._local_nb_prediction(
-            #         X_,
-            #         k_nearest_samples,
-            #         k_nearest_labels,
-            #         mode="predict")
-            #         for X_, k_nearest_samples, k_nearest_labels
-            #             in self._determine_k_closest_samples(X)
-            # ])
-
-            # k_nearest_samples, k_nearest_labels = \
-            #     self._determine_k_closest_samples(X)
-
             return self._local_nb_prediction(
                 X,
-            #     k_nearest_samples,
-            #     k_nearest_labels,
                 mode="predict")
         else:
             if self.model_name in dense_input \
@@ -553,14 +531,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
             "using", self.n_proc, "processes")
         if self.model_name == "nn+nb":
             
-            # X = X.astype(int)
-            # k_nearest_samples, k_nearest_labels = \
-                # self._determine_k_closest_samples(X)
-           
             return self._local_nb_prediction(
                 X,
-                # k_nearest_samples,
-                # k_nearest_labels,
                 mode="predict_proba")
 
         if self.model_name in dense_input \

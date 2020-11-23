@@ -1,5 +1,7 @@
 import os
 
+import gzip
+
 import numpy as np
 import pandas as pd 
 
@@ -18,6 +20,8 @@ import multiprocessing as mp
 import functools
 
 from standardiser import standardise
+
+from data_utils import read_smiles, load_labels
 
 # RDK
 
@@ -213,53 +217,68 @@ def get_MACCs(smiles, n_proc=8):
 
     return sp.vstack(fps)
 
-def compute_fp(smiles, fp, n_bits=1024, n_proc=8):
-    print ("computing", fp, "fingerpints for", 
-        smiles.shape[0], "SMILES",
-        "using", n_proc, "cores")
-    if fp == "morg2":
-        fps = get_morg(smiles, n_bits=n_bits, n_proc=n_proc)
-    elif fp == "morg3":
-        fps = get_morg(smiles, radius=3, n_bits=n_bits, n_proc=n_proc)
-    elif fp == "rdk":
-        fps = get_rdk(smiles, n_bits=n_bits, n_proc=n_proc)
-    elif fp == "rdk_maccs":
-        fps = get_rdk_maccs(smiles, n_proc=n_proc)
-    elif fp == "maccs":
-        fps = get_MACCs(smiles, n_proc=n_proc)
-    elif fp == "circular":
-        fps = get_circular(smiles, n_proc=n_proc)
-    else:
-        raise NotImplementedError
+def compute_fp(smiles, all_fp, n_bits=1024, n_proc=4):
 
-    print ("computed", fp, "fingerprint")
-    
-    return fps
+    if all_fp == "all": # ensemble from concatenation of all fps
+        all_fp = ("morg2", "morg3", 
+        "rdk", "rdk_maccs",
+        "maccs", "circular", )
+
+    if not isinstance(all_fp, tuple):
+        if not isinstance(all_fp, list):
+            all_fp = [all_fp]   
+        assert isinstance(all_fp, list)
+        all_fp = tuple(all_fp)
+
+    fps = []
+    for fp in all_fp:
+        print ("computing", fp, "fingerpints for", 
+            smiles.shape[0], "SMILES",
+            "using", n_proc, "cores")
+        if fp == "morg2":
+            fps.append(get_morg(smiles, n_bits=n_bits, n_proc=n_proc))
+        elif fp == "morg3":
+            fps.append(get_morg(smiles, radius=3, n_bits=n_bits, n_proc=n_proc))
+        elif fp == "rdk":
+            fps.append(get_rdk(smiles, n_bits=n_bits, n_proc=n_proc))
+        elif fp == "rdk_maccs":
+            fps.append(get_rdk_maccs(smiles, n_proc=n_proc))
+        elif fp == "maccs":
+            fps.append(get_MACCs(smiles, n_proc=n_proc))
+        elif fp == "circular":
+            fps.append(get_circular(smiles, n_proc=n_proc))
+        else:
+            raise NotImplementedError
+
+        print ("computed", fp, "fingerprint")
+        
+    return sp.hstack(fps, format="csr")
 
 
 def load_training_fingerprints(smiles, fp):
     fp_filename = os.path.join("data",
-        "fingerprints", "{}.pkl".format(fp))
+        "fingerprints", "{}.pkl.gz".format(fp))
     print ("loading fingerprints from", 
         fp_filename)
-    with open(fp_filename, "rb") as f:
-        fingerprints = pkl.load(f)
+    if fp_filename.endswith(".pkl.gz"):
+        f = gzip.open(fp_filename, "rb")
+    else:
+        f = open(fp_filename, "rb") 
+    fingerprints = pkl.load(f)
+    f.close()
     return sp.vstack([fingerprints[smi] 
         for smi in smiles])
-
 
 def main():
 
     fps = ("morg2", "morg3", 
         "rdk", "rdk_maccs",
-        "maccs", "circular", )
+        "maccs", "circular", 
+        "all")
 
     training_smiles_filename = os.path.join("data", 
         "compounds.smi.gz")
-    print ("reading training smiles from", 
-        training_smiles_filename)
-    smiles = pd.read_csv(training_smiles_filename,header=None, 
-        sep="\t", index_col=1)[0].astype("string")
+    smiles = read_smiles(training_smiles_filename)
 
     num_smiles = smiles.shape[0]
     print ("determining fingerprints for", 
@@ -278,7 +297,7 @@ def main():
         if os.path.exists(fingerprints_filename):
             continue
 
-        fingerprints = compute_fp(smiles, fp, n_proc=4)
+        fingerprints = compute_fp(smiles, fp, n_proc=8)
         assert fingerprints.shape[0] == num_smiles
         fingerprints_dict = {
             smile: fp for smile, fp
@@ -291,7 +310,6 @@ def main():
 
         print ("completed fingerprint", fp)
         print ()
-        
 
 if __name__ == "__main__":
     main()
