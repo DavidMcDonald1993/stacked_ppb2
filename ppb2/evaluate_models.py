@@ -140,6 +140,8 @@ def validate(args, split_name):
     # model = load_model(model_filename)
     # model.set_n_proc(args.n_proc)
 
+    model_name = get_model_name(args)
+
     X_test_filename = os.path.join("splits", 
         split_name,
         "test.smi")
@@ -156,7 +158,7 @@ def validate(args, split_name):
     assert (1-Y_test).any(axis=1).all()
 
     prediction_dir = os.path.join("predictions", 
-        split_name, "{}.pkl-test".format(get_model_name(args)))
+        split_name, "{}.pkl-test".format(model_name))
     
     prediction_filename = os.path.join(prediction_dir, 
         "predictions.csv.gz")
@@ -243,8 +245,8 @@ def main():
         n_splits=5,
         k=5)
 
-    name = get_model_name(args)
-    cross_validation_results.name = name
+    model_name = get_model_name(args)
+    cross_validation_results.name = model_name
 
     print ("results:")
     print (cross_validation_results)
@@ -253,7 +255,7 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
    
     results_filename = os.path.join(results_dir, 
-        "{}-results.pkl".format(name))
+        "{}-results.pkl".format(model_name))
     print ("picking results to", results_filename)
     with open(results_filename, "wb") as f:
         pkl.dump(cross_validation_results, f, pkl.HIGHEST_PROTOCOL)
