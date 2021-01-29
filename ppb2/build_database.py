@@ -11,6 +11,8 @@ from itertools import count
 
 from scipy import sparse as sp
 
+import json
+
 def construct_compound_to_targets(df):
     print ("constructing active to target mapping")
     compounds_to_targets = defaultdict(list)
@@ -39,7 +41,7 @@ def filter_df(df,
     max_nM=10000):
 
     # filter by target organism
-    df = df.loc[df["Source of target"].isin(source_organisms)]
+    # df = df.loc[df["Source of target"].isin(source_organisms)]
 
     # filter by bioactivity
     df = df.loc[~df["Bioactivity of compound"].\
@@ -92,10 +94,10 @@ def main():
     ], axis=0)
     print ()
 
-    # build mapping from compound to target list
+    # build mapping from compound to target list (dict)
     compounds_to_targets = construct_compound_to_targets(df)
 
-    output_dir = os.path.join("data", )
+    output_dir = os.path.join("data", "new")
     print ("making directory", output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -118,12 +120,12 @@ def main():
     columns_of_interest = [
         "ChEMBL compound ID",
         "SMILES", 
-        "Xfp fingerprint",
-        "MQN fingerprint",
-        "SMIfp fingerprint",
-        "Daylight type substructure fingerprint (Sfp)",
-        "Extended connectivity fingerprint (ECfp4)",
-        "APfp fingerprint",
+        # "Xfp fingerprint",
+        # "MQN fingerprint",
+        # "SMIfp fingerprint",
+        # "Daylight type substructure fingerprint (Sfp)",
+        # "Extended connectivity fingerprint (ECfp4)",
+        # "APfp fingerprint",
     ]
     assert all([column in df.columns 
         for column in columns_of_interest])
@@ -159,12 +161,12 @@ def main():
             f.write("{}\t{}\n".format(smi, compound))
 
     print ("converting labels to sparse matrix")
-    compounds_to_id = {compound: i 
+    compound_to_id = {compound: i 
         for i, compound in enumerate(df.index)}
-    targets_to_id = defaultdict(count().__next__)
+    target_to_id = defaultdict(count().__next__)
 
     indices = [
-        (compounds_to_id[compound], targets_to_id[target]) 
+        (compound_to_id[compound], target_to_id[target]) 
         for compound, targets in compounds_to_targets.items()
         for target in targets]
     data = [True] * len(indices)
@@ -180,24 +182,31 @@ def main():
     sp.save_npz(target_filename, targets)
 
     id_to_compound = {v: k 
-        for k, v in compounds_to_id.items()}
+        for k, v in compound_to_id.items()}
     id_to_target = {v: k 
-        for k, v in targets_to_id.items()}
+        for k, v in target_to_id.items()}
 
     id_to_compound_filename = os.path.join(output_dir,
-        "id_to_compound.pkl")
+        "id_to_compound.json")
     id_to_target_filename = os.path.join(output_dir,
-        "id_to_target.pkl")
+        "id_to_target.json")
 
     print ("saving id_to_compound to",
         id_to_compound_filename)
-    with open(id_to_compound_filename, "wb") as f:
-        pkl.dump(id_to_compound, f, pkl.HIGHEST_PROTOCOL)
+    with open(id_to_compound_filename, "w") as f:
+        # pkl.dump(id_to_compound, f, pkl.HIGHEST_PROTOCOL)
+        json.dump(id_to_compound, f, indent=4)
 
     print ("saving id_to_target to",
         id_to_target_filename)
-    with open(id_to_target_filename, "wb") as f:
-        pkl.dump(id_to_target, f, pkl.HIGHEST_PROTOCOL)
+    with open(id_to_target_filename, "w") as f:
+        # pkl.dump(id_to_target, f, pkl.HIGHEST_PROTOCOL)
+        json.dump(id_to_target, f, indent=4)
+
+    for compound, compound_targets in compounds_to_targets.items():
+        for compound_target in compound_targets:
+            assert targets[compound_to_id[compound], target_to_id[compound_target]]
+
   
 if __name__ == "__main__":
     main()

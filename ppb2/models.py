@@ -299,11 +299,15 @@ class PPB2(BaseEstimator, ClassifierMixin):
             self.model = SVC(probability=True)
         elif model_name == "bag":
             self.model = BaggingClassifier(
-                n_jobs=self.n_proc)
+                # n_jobs=self.n_proc,
+                n_jobs=None,
+                verbose=True)
         elif model_name == "lr":
             self.model = LogisticRegressionCV(
                 max_iter=1000,
-                n_jobs=self.n_proc)
+                # n_jobs=self.n_proc,
+                n_jobs=None,
+                )
         elif model_name == "ada":
             self.model = AdaBoostClassifier()
         elif model_name == "gb":
@@ -323,7 +327,11 @@ class PPB2(BaseEstimator, ClassifierMixin):
         elif model_name == "ridge":
             self.model = RidgeClassifierCV()
         elif model_name == "xgc":
-            self.model = XGBClassifier()
+            self.model = XGBClassifier(
+                # n_jobs=self.n_proc, 
+                n_jobs=None,
+                num_parallel_tree=None,
+                verbosity=1)
         else:
             raise Exception
         
@@ -351,7 +359,8 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 n_jobs=self.n_proc)
 
         # covert X to fingerprint
-        X = load_training_fingerprints(X, self.fp,)
+        # X = load_training_fingerprints(X, self.fp,)
+        X = compute_fp(smiles=X, all_fp=self.fp, n_proc=self.n_proc)
 
         if self.model_name in dense_input: # cannot handle sparse input
             X = X.A
@@ -369,7 +378,7 @@ class PPB2(BaseEstimator, ClassifierMixin):
                 "for", y.shape[1], "targets",
                 "using", self.n_proc, "core(s)")
 
-            with parallel_backend('threading', n_jobs=self.n_proc):
+            with parallel_backend('loky', n_jobs=self.n_proc):
                 self.model.fit(X, y)
 
         return self

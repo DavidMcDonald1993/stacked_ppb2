@@ -24,7 +24,6 @@ def sdf_to_smiles(filename,
         mol_df = mol_df.set_index(index)
     return mol_df[smiles_name]
     
-
 def valid_smiles(smi):
     smi = smi["SMILES"]
     assert smi is not None
@@ -71,7 +70,6 @@ def load_labels(labels_filename):
 def split_data(X, Y, n_splits=5, output_dir="splits"):
     split = IterativeStratification(n_splits=n_splits, order=1, random_state=0, )
 
-    splits = []
     for split_no, (train_idx, test_idx) in enumerate(split.split(X, Y)):
         print ("processing fold", split_no+1, "/", n_splits)
        
@@ -144,48 +142,50 @@ def filter_data(X, Y,
 
 def main(): # run this to generate training splits
 
-    # n_splits = 5
+    data_dir = os.path.join("data", "new",)
+    output_dir = os.path.join("splits_new")
 
-    # training_smiles_filename = os.path.join("data", 
-    #     "compounds.smi")
-    # assert os.path.exists(training_smiles_filename)
-    # X = read_smiles(training_smiles_filename)
+    n_splits = 5
 
-    # labels_filename = os.path.join("data", "targets.npz")
-    # assert os.path.exists(labels_filename)
-    # Y = load_labels(labels_filename).A
+    training_smiles_filename = os.path.join(data_dir,
+        "compounds.smi")
+    assert os.path.exists(training_smiles_filename)
+    X = read_smiles(training_smiles_filename)
 
-    # # filter out compounds that hit at less than min_hits targets
-    # min_hits = 1
+    labels_filename = os.path.join(data_dir, "targets.npz")
+    assert os.path.exists(labels_filename)
+    Y = load_labels(labels_filename).A
 
-    # # remove any targets that are hit/not hit by less than min_actives compounds
-    # min_actives = n_splits # at least one positive example of the class in each split
+    # filter out compounds that hit at less than min_hits targets
+    min_hits = 1
 
-    # X, Y = filter_data(X, Y, 
-    #     min_actives=min_actives, 
-    #     min_hits=min_hits)
+    # remove any targets that are hit/not hit by less than min_actives compounds
+    min_actives = n_splits # at least one positive example of the class in each split
 
-    # assert X.shape[0] == Y.shape[0]
-    # assert Y.any(axis=1).all()
-    # assert (1-Y).any(axis=1).all()
-    # assert not Y.all(axis=0).any()
-    # assert not (1-Y).all(axis=0).any()
-    # assert (Y.sum(axis=0) >= min_actives).all()
-    # assert (Y.sum(axis=1) >= min_hits).all()
+    X, Y = filter_data(X, Y, 
+        min_actives=min_actives, 
+        min_hits=min_hits)
 
-    # output_dir = os.path.join("splits")
-    # split_data(X, Y, 
-    #     n_splits=n_splits, 
-    #     output_dir=output_dir)
+    assert X.shape[0] == Y.shape[0]
+    assert Y.any(axis=1).all()
+    assert (1-Y).any(axis=1).all()
+    assert not Y.all(axis=0).any()
+    assert not (1-Y).all(axis=0).any()
+    assert (Y.sum(axis=0) >= min_actives).all()
+    assert (Y.sum(axis=1) >= min_hits).all()
+
+    split_data(X, Y, 
+        n_splits=n_splits, 
+        output_dir=output_dir)
 
     # process test data
-    test_smiles_filename = os.path.join("splits",
+    test_smiles_filename = os.path.join(output_dir,
         "complete", 
         "test_original.smi")
     assert os.path.exists(test_smiles_filename)
     X = read_smiles(test_smiles_filename)
 
-    test_labels_filename = os.path.join("splits",
+    test_labels_filename = os.path.join(output_dir,
         "complete", 
         "test_original.npz")
     assert os.path.exists(test_labels_filename)

@@ -142,11 +142,11 @@ def validate(args, split_name):
 
     model_name = get_model_name(args)
 
-    X_test_filename = os.path.join("splits", 
-        split_name,
-        "test.smi")
-    assert os.path.exists(X_test_filename)
-    X_test = read_smiles(X_test_filename)
+    # X_test_filename = os.path.join("splits", 
+    #     split_name,
+    #     "test.smi")
+    # assert os.path.exists(X_test_filename)
+    # X_test = read_smiles(X_test_filename)
 
     Y_test_filename = os.path.join("splits", 
         split_name,
@@ -164,16 +164,19 @@ def validate(args, split_name):
         "predictions.csv.gz")
     assert os.path.exists(prediction_filename)
     predictions = pd.read_csv(prediction_filename, index_col=0)
-    predictions = predictions.values
+
+    idx = predictions.index
+
+    predictions = predictions.loc[idx].values
 
     probs_filename = os.path.join(prediction_dir, 
         "probs.csv.gz")
     assert os.path.exists(probs_filename)
     probs = pd.read_csv(probs_filename, index_col=0)
-    probs = probs.values
+    probs = probs.loc[idx].values
 
     assert isinstance(probs, np.ndarray)
-    assert X_test.shape[0] == Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
+    assert Y_test.shape[0] == predictions.shape[0] == probs.shape[0]
 
     return compute_measures(
         Y_test, 

@@ -25,7 +25,7 @@ from data_utils import read_smiles, load_labels
 
 # RDK
 
-def get_rdk_mol(smi, perform_standardisation=True):
+def get_rdk_mol(smi, perform_standardisation=False):
     mol = Chem.MolFromSmiles(smi)
     if mol is None:
         raise Exception
