@@ -3,15 +3,15 @@
 #SBATCH --job-name=TRAINMODELS
 #SBATCH --output=TRAINMODELS_%A_%a.out
 #SBATCH --error=TRAINMODELS_%A_%a.err
-#SBATCH --array=0-215
+#SBATCH --array=0-251
 #SBATCH --time=10-00:00:00
 #SBATCH -c 10
-#SBATCH --mem=20G
+#SBATCH --mem=50G
 
 N_PROC=5
 
 splits=(split_0 split_1 split_2 split_3 split_4 complete)
-models=(nn nb nn+nb svc lr bag)
+models=(dum nn nb nn+nb ada bag xgc)
 fps=(morg2 morg3 maccs circular rdk rdk_maccs)
 
 num_splits=${#splits[@]}

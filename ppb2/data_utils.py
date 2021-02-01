@@ -145,38 +145,38 @@ def main(): # run this to generate training splits
     data_dir = os.path.join("data", "new",)
     output_dir = os.path.join("splits_new")
 
-    n_splits = 5
+    # n_splits = 5
 
-    training_smiles_filename = os.path.join(data_dir,
-        "compounds.smi")
-    assert os.path.exists(training_smiles_filename)
-    X = read_smiles(training_smiles_filename)
+    # training_smiles_filename = os.path.join(data_dir,
+    #     "compounds.smi")
+    # assert os.path.exists(training_smiles_filename)
+    # X = read_smiles(training_smiles_filename)
 
-    labels_filename = os.path.join(data_dir, "targets.npz")
-    assert os.path.exists(labels_filename)
-    Y = load_labels(labels_filename).A
+    # labels_filename = os.path.join(data_dir, "targets.npz")
+    # assert os.path.exists(labels_filename)
+    # Y = load_labels(labels_filename).A
 
-    # filter out compounds that hit at less than min_hits targets
-    min_hits = 1
+    # # filter out compounds that hit at less than min_hits targets
+    # min_hits = 1
 
-    # remove any targets that are hit/not hit by less than min_actives compounds
-    min_actives = n_splits # at least one positive example of the class in each split
+    # # remove any targets that are hit/not hit by less than min_actives compounds
+    # min_actives = n_splits # at least one positive example of the class in each split
 
-    X, Y = filter_data(X, Y, 
-        min_actives=min_actives, 
-        min_hits=min_hits)
+    # X, Y = filter_data(X, Y, 
+    #     min_actives=min_actives, 
+    #     min_hits=min_hits)
 
-    assert X.shape[0] == Y.shape[0]
-    assert Y.any(axis=1).all()
-    assert (1-Y).any(axis=1).all()
-    assert not Y.all(axis=0).any()
-    assert not (1-Y).all(axis=0).any()
-    assert (Y.sum(axis=0) >= min_actives).all()
-    assert (Y.sum(axis=1) >= min_hits).all()
+    # assert X.shape[0] == Y.shape[0]
+    # assert Y.any(axis=1).all()
+    # assert (1-Y).any(axis=1).all()
+    # assert not Y.all(axis=0).any()
+    # assert not (1-Y).all(axis=0).any()
+    # assert (Y.sum(axis=0) >= min_actives).all()
+    # assert (Y.sum(axis=1) >= min_hits).all()
 
-    split_data(X, Y, 
-        n_splits=n_splits, 
-        output_dir=output_dir)
+    # split_data(X, Y, 
+    #     n_splits=n_splits, 
+    #     output_dir=output_dir)
 
     # process test data
     test_smiles_filename = os.path.join(output_dir,
